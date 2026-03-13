@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
 import { listSessions, capture, sendKeys, selectWindow, spawnAgent, killSession, killEntireSession, renameWindow } from "./services/ssh";
-import { getTokenUsage, getRealtimeSessions, getUsageLimits } from "./services/token-usage";
+import { getTokenUsage, getRealtimeSessions, getUsageLimits, getTokenUsageByAgent } from "./services/token-usage";
+import type { TimeRange } from "./services/token-usage";
 import { AgentTracker } from "./core/agent-tracker";
 import { TaskDispatcher } from "./core/dispatcher";
 import { loadConfig, addWorker, removeWorker } from "./config";
@@ -479,6 +480,21 @@ app.get("/api/token-usage", async (c) => {
 app.get("/api/token-usage/realtime", async (c) => {
   try {
     const data = await getRealtimeSessions();
+    return c.json(data);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+app.get("/api/token-usage/by-agent", async (c) => {
+  try {
+    const rawRange = c.req.query("range") ?? "7d";
+    const VALID_RANGES: readonly string[] = ["7d", "30d", "mtd", "all"];
+    if (!VALID_RANGES.includes(rawRange)) {
+      return c.json({ error: "Invalid range. Must be one of: 7d, 30d, mtd, all" }, 400);
+    }
+    const data = await getTokenUsageByAgent(rawRange as TimeRange);
     return c.json(data);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

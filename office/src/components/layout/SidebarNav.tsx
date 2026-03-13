@@ -24,7 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "command",   label: "Command",   icon: Terminal },
   { id: "tasks",     label: "Tasks",     icon: KanbanSquare },
   { id: "goals",     label: "Goals",     icon: Target },
-  { id: "tokens",    label: "Tokens",    icon: Coins },
+  { id: "tokens",    label: "Costs",     icon: Coins },
   { id: "terminal",  label: "Terminal",  icon: Monitor },
 ];
 

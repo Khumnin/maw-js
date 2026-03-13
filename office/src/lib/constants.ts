@@ -38,6 +38,7 @@ export function agentSortKey(name: string): number {
 }
 
 // Agent capsule colors (deterministic by name hash)
+// AGENT_COLORS values MUST be 6-digit hex (#rrggbb) — bar/avatar opacity suffix trick relies on this format
 export const AGENT_COLORS = [
   "#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffa07a",
   "#dda0dd", "#98d8c8", "#f7dc6f", "#bb8fce", "#85c1e9",

@@ -58,7 +58,7 @@ const NAV_ITEMS = [
   { id: "command",   label: "Go to Command",    icon: TerminalIcon,      shortcut: "G C" },
   { id: "tasks",     label: "Go to Tasks",      icon: KanbanSquareIcon,  shortcut: "G T" },
   { id: "goals",     label: "Go to Goals",      icon: TargetIcon,        shortcut: "G G" },
-  { id: "tokens",    label: "Go to Tokens",     icon: CoinsIcon,         shortcut: "G K" },
+  { id: "tokens",    label: "Go to Costs",      icon: CoinsIcon,         shortcut: "G K" },
   { id: "terminal",  label: "Go to Terminal",   icon: MonitorIcon,       shortcut: "G R" },
 ];
 

@@ -6,7 +6,6 @@ import { UniverseBg } from "./components/UniverseBg";
 import { RoomGrid } from "./components/RoomGrid";
 import { TerminalModal } from "./components/TerminalModal";
 import { MissionControl } from "./components/MissionControl";
-import { TokenUsage } from "./components/TokenUsage";
 import { ShortcutOverlay } from "./components/ShortcutOverlay";
 import { CommandCenter } from "./components/CommandCenter";
 import { TerminalPage } from "./components/TerminalPage";
@@ -17,6 +16,10 @@ import type { AgentState } from "./lib/types";
 
 const DashboardView = lazy(() =>
   import("./components/dashboard/DashboardView").then((m) => ({ default: m.DashboardView }))
+);
+
+const CostBreakdownView = lazy(() =>
+  import("./components/cost/CostBreakdownView").then((m) => ({ default: m.CostBreakdownView }))
 );
 
 const TaskBoardView = lazy(() =>
@@ -201,14 +204,25 @@ export function App() {
     );
   }
 
-  // ── Token Usage ─────────────────────────────────────────────────────────────
+  // ── Cost Breakdown (formerly Token Usage) ───────────────────────────────────
   if (route === "tokens") {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
         <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
-          <TokenUsage sessions={sessions} />
+          <Suspense
+            fallback={
+              <div
+                className="flex items-center justify-center h-full"
+                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+              >
+                <p className="text-[12px] font-mono">Loading costs…</p>
+              </div>
+            }
+          >
+            <CostBreakdownView sessions={sessions} />
+          </Suspense>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
       </AppShell>

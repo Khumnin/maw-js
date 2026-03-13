@@ -593,6 +593,218 @@ export async function getUsageLimits(): Promise<UsageLimits> {
   return data;
 }
 
+// ── Agent Cost Attribution Types ─────────────────────────────────────────────
+
+export type TimeRange = "7d" | "30d" | "mtd" | "all";
+
+export interface AgentCost {
+  agentName: string | null;
+  estimatedCost: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreation: number;
+  cacheRead: number;
+  sessionCount: number;
+  turnCount: number;
+  costShare: number;
+}
+
+export interface ProjectCost {
+  project: string;
+  estimatedCost: number;
+  sessionCount: number;
+  costShare: number;
+}
+
+export interface ByAgentResponse {
+  agents: AgentCost[];
+  projects: ProjectCost[];
+  totalCost: number;
+  totalSessions: number;
+  range: TimeRange;
+  cachedAt: string;
+}
+
+// ── Time range helper ─────────────────────────────────────────────────────────
+
+function rangeStartDate(range: TimeRange): Date | null {
+  const now = new Date();
+  switch (range) {
+    case "7d":  return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case "30d": return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    case "mtd": return new Date(now.getFullYear(), now.getMonth(), 1);
+    case "all": return null;
+  }
+}
+
+// ── By-agent aggregation cache (10s TTL, keyed by range) ─────────────────────
+
+const byAgentCache = new Map<TimeRange, { data: ByAgentResponse; ts: number }>();
+const BY_AGENT_CACHE_TTL_MS = 10_000;
+
+// ── Project slug extraction ───────────────────────────────────────────────────
+
+/**
+ * Derives a human-readable project name from a JSONL directory path.
+ * Examples:
+ *   ~/.claude/projects/-Users-alice-Project-maw-js  → "maw-js"
+ *   ~/.claude/projects/-Users-alice-documents       → "documents"
+ */
+function projectSlugFromDir(dir: string): string {
+  const base = path.basename(dir);
+  // Strip leading dashes produced by Claude Code's path encoding
+  const cleaned = base.replace(/^-+/, "");
+  // If the path looks like a flattened absolute path (contains hyphens for slashes)
+  // extract the last segment by treating hyphens as separators only when
+  // the segment after "Project-" or "project-" is present.
+  const projectMarker = cleaned.match(/[Pp]roject-(.+)$/);
+  if (projectMarker?.[1]) return projectMarker[1];
+  // Fall back: last hyphen-separated token
+  const parts = cleaned.split("-");
+  const last = parts[parts.length - 1];
+  return last || "default";
+}
+
+// ── Public: GET /api/token-usage/by-agent ────────────────────────────────────
+
+async function buildTokenUsageByAgent(range: TimeRange): Promise<ByAgentResponse> {
+  // 1. Resolve the time-range cutoff
+  const rangeStart = rangeStartDate(range);
+
+  // 2. Get the live prefix → session-name map from realtime tmux state
+  const realtimeSessions = await getRealtimeSessions();
+  const prefixToName = new Map<string, string>();
+  for (const s of realtimeSessions) {
+    prefixToName.set(s.sessionPrefix, s.sessionName);
+  }
+
+  // 3. Pull all parsed JSONL files from the shared 10s cache
+  const parsed = await getAllParsedFiles();
+
+  // 4. Determine the project slug for this JSONL directory
+  //    (Sprint 1: single project — all files share one directory)
+  const projectSlug = projectSlugFromDir(JSONL_DIR);
+
+  // 5. Aggregate: agentName → accumulated stats
+  const agentMap = new Map<string | null, {
+    estimatedCost: number;
+    inputTokens: number;
+    outputTokens: number;
+    cacheCreation: number;
+    cacheRead: number;
+    sessionCount: number;
+    turnCount: number;
+  }>();
+
+  // 6. Aggregate: project → accumulated stats
+  const projectMap = new Map<string, {
+    estimatedCost: number;
+    sessionCount: number;
+  }>();
+
+  for (const { raw, sessionId } of parsed) {
+    // Apply time-range filter on lastSeen
+    if (rangeStart !== null) {
+      const sortedTs = raw.timestamps.slice().sort();
+      const lastSeen = sortedTs[sortedTs.length - 1];
+      if (!lastSeen) continue;
+      if (new Date(lastSeen).getTime() < rangeStart.getTime()) continue;
+    }
+
+    // Dominant model for cost estimation
+    const model =
+      Object.entries(raw.modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "unknown";
+
+    const sessionCost = estimateCost(
+      model,
+      raw.inputTokens,
+      raw.outputTokens,
+      raw.cacheCreation,
+      raw.cacheRead
+    );
+
+    // Attribute to agent name via the 8-char session prefix
+    const prefix = sessionId.slice(0, 8);
+    const agentName: string | null = prefixToName.get(prefix) ?? null;
+
+    const existing = agentMap.get(agentName) ?? {
+      estimatedCost: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreation: 0,
+      cacheRead: 0,
+      sessionCount: 0,
+      turnCount: 0,
+    };
+    existing.estimatedCost += sessionCost;
+    existing.inputTokens  += raw.inputTokens;
+    existing.outputTokens += raw.outputTokens;
+    existing.cacheCreation += raw.cacheCreation;
+    existing.cacheRead    += raw.cacheRead;
+    existing.sessionCount += 1;
+    existing.turnCount    += raw.turnCount;
+    agentMap.set(agentName, existing);
+
+    // Accumulate into project bucket
+    const projExisting = projectMap.get(projectSlug) ?? { estimatedCost: 0, sessionCount: 0 };
+    projExisting.estimatedCost += sessionCost;
+    projExisting.sessionCount  += 1;
+    projectMap.set(projectSlug, projExisting);
+  }
+
+  // 7. Compute totals
+  let totalCost = 0;
+  let totalSessions = 0;
+  for (const stats of agentMap.values()) {
+    totalCost    += stats.estimatedCost;
+    totalSessions += stats.sessionCount;
+  }
+
+  // 8. Build agents array, sorted by cost descending
+  const agents: AgentCost[] = Array.from(agentMap.entries())
+    .map(([agentName, stats]) => ({
+      agentName,
+      estimatedCost: stats.estimatedCost,
+      inputTokens: stats.inputTokens,
+      outputTokens: stats.outputTokens,
+      cacheCreation: stats.cacheCreation,
+      cacheRead: stats.cacheRead,
+      sessionCount: stats.sessionCount,
+      turnCount: stats.turnCount,
+      costShare: totalCost > 0 ? stats.estimatedCost / totalCost : 0,
+    }))
+    .sort((a, b) => b.estimatedCost - a.estimatedCost);
+
+  // 9. Build projects array, sorted by cost descending
+  const projects: ProjectCost[] = Array.from(projectMap.entries())
+    .map(([project, stats]) => ({
+      project,
+      estimatedCost: stats.estimatedCost,
+      sessionCount: stats.sessionCount,
+      costShare: totalCost > 0 ? stats.estimatedCost / totalCost : 0,
+    }))
+    .sort((a, b) => b.estimatedCost - a.estimatedCost);
+
+  return {
+    agents,
+    projects,
+    totalCost,
+    totalSessions,
+    range,
+    cachedAt: new Date().toISOString(),
+  };
+}
+
+export async function getTokenUsageByAgent(range: TimeRange): Promise<ByAgentResponse> {
+  const now = Date.now();
+  const cached = byAgentCache.get(range);
+  if (cached && now - cached.ts < BY_AGENT_CACHE_TTL_MS) return cached.data;
+
+  const data = await buildTokenUsageByAgent(range);
+  byAgentCache.set(range, { data, ts: now });
+  return data;
+}
+
 // ── Real-time: parse tmux status bar ─────────────────────────────────────────
 
 export interface RealtimeSession {
