@@ -120,8 +120,11 @@ export async function sendKeys(target: string, text: string, host?: string): Pro
     "\x1b[B": "Down",
     "\x1b[C": "Right",
     "\x1b[D": "Left",
+    "\x1b[Z": "BTab",
+    "\t": "Tab",
     "\r": "Enter",
     "\b": "BSpace",
+    "\x7f": "BSpace",
     "\x15": "C-u",
   };
   if (SPECIAL_KEYS[text]) {
