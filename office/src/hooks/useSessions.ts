@@ -44,6 +44,8 @@ export function useSessions() {
   const [captureData, setCaptureData] = useState<Record<string, { preview: string; status: PaneStatus }>>({});
   /** isWorker flags keyed by tmux target ("session:windowIndex") — sourced from agents-updated WS */
   const [workerFlags, setWorkerFlags] = useState<Record<string, boolean>>({});
+  /** projectLabel keyed by tmux target — sourced from agents-updated WS */
+  const [projectLabels, setProjectLabels] = useState<Record<string, string | null>>({});
   const pollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
@@ -71,13 +73,16 @@ export function useSessions() {
     if (data.type === "sessions") {
       setSessions(data.sessions);
     } else if (data.type === "agents-updated") {
-      // Build a target → isWorker lookup from the TrackedAgent list
+      // Build target-keyed lookups from the TrackedAgent list
       const flags: Record<string, boolean> = {};
+      const labels: Record<string, string | null> = {};
       const trackedAgents: TrackedAgent[] = data.agents ?? [];
       for (const a of trackedAgents) {
         flags[a.target] = a.isWorker;
+        labels[a.target] = a.projectLabel ?? null;
       }
       setWorkerFlags(flags);
+      setProjectLabels(labels);
     }
   }, []);
 
@@ -236,12 +241,13 @@ export function useSessions() {
           preview: cd?.preview || "",
           status: cd?.status || "idle",
           isWorker: workerFlags[key] ?? false,
+          projectLabel: projectLabels[key] ?? null,
         };
       })
     );
     list.sort((a, b) => agentSortKey(a.name) - agentSortKey(b.name));
     return list;
-  }, [sessions, captureData, workerFlags]);
+  }, [sessions, captureData, workerFlags, projectLabels]);
 
   return { sessions, agents, saiyanTargets, blinkTargets, eventLog, addEvent, handleMessage };
 }

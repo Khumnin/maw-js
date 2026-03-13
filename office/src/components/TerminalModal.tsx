@@ -140,6 +140,13 @@ export function TerminalModal({ agent, send, onClose, onNavigate, onSelectSiblin
   }, [flushPending]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Shift+Tab → send ECMA-48 reverse-tab escape sequence to the terminal process
+    if (e.key === "Tab" && e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      send({ type: "send", target: agent.target, text: "\x1b[Z" });
+      return;
+    }
     // Ctrl+Escape closes the modal; plain Escape sends \x1b to the tmux agent
     if (e.key === "Escape") {
       e.preventDefault();

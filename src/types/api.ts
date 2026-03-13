@@ -82,6 +82,11 @@ export const SpawnAgentSchema = z.object({
   workDir:       z.string().optional(),
   initialPrompt: z.string().optional(),
   agentName:     z.string().optional(),
+  project:       z.string().max(64).optional(),
+});
+
+export const SetProjectSchema = z.object({
+  project: z.string().max(64),
 });
 
 export type SpawnAgentInput = z.infer<typeof SpawnAgentSchema>;

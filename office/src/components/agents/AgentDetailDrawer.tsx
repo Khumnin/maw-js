@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { ProjectInline } from "@/components/agents/ProjectInline";
 import type { TrackedAgent } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ export function AgentDetailDrawer({ agent, open, onClose }: AgentDetailDrawerPro
               <Field label="Window" value={agent.windowName} mono />
               <Field label="Target" value={agent.target} mono />
               <Field label="Worker" value={agent.isWorker ? "Yes" : "No"} />
+              <ProjectInline target={agent.target} projectLabel={agent.projectLabel ?? null} />
             </Section>
 
             {/* Activity */}
@@ -271,6 +273,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </div>
   );
 }
+
+// ── Field ─────────────────────────────────────────────────────────────────────
 
 interface FieldProps {
   label: string;

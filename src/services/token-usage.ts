@@ -637,6 +637,12 @@ function rangeStartDate(range: TimeRange): Date | null {
   }
 }
 
+// ── Minimal tracker interface for project-label lookup ────────────────────────
+
+export interface AgentLookup {
+  getAll(): Array<{ sessionName: string; projectLabel?: string | null }>;
+}
+
 // ── By-agent aggregation cache (10s TTL, keyed by range) ─────────────────────
 
 const byAgentCache = new Map<TimeRange, { data: ByAgentResponse; ts: number }>();
@@ -667,7 +673,7 @@ function projectSlugFromDir(dir: string): string {
 
 // ── Public: GET /api/token-usage/by-agent ────────────────────────────────────
 
-async function buildTokenUsageByAgent(range: TimeRange): Promise<ByAgentResponse> {
+async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLookup): Promise<ByAgentResponse> {
   // 1. Resolve the time-range cutoff
   const rangeStart = rangeStartDate(range);
 
@@ -681,9 +687,17 @@ async function buildTokenUsageByAgent(range: TimeRange): Promise<ByAgentResponse
   // 3. Pull all parsed JSONL files from the shared 10s cache
   const parsed = await getAllParsedFiles();
 
-  // 4. Determine the project slug for this JSONL directory
+  // 4. Determine the fallback project slug for this JSONL directory
   //    (Sprint 1: single project — all files share one directory)
-  const projectSlug = projectSlugFromDir(JSONL_DIR);
+  const fallbackProjectSlug = projectSlugFromDir(JSONL_DIR);
+
+  // Build a sessionName → projectLabel lookup from the tracker
+  const agentProjectLabels = new Map<string, string | null>();
+  if (agentLookup) {
+    for (const a of agentLookup.getAll()) {
+      agentProjectLabels.set(a.sessionName, a.projectLabel ?? null);
+    }
+  }
 
   // 5. Aggregate: agentName → accumulated stats
   const agentMap = new Map<string | null, {
@@ -745,7 +759,10 @@ async function buildTokenUsageByAgent(range: TimeRange): Promise<ByAgentResponse
     existing.turnCount    += raw.turnCount;
     agentMap.set(agentName, existing);
 
-    // Accumulate into project bucket
+    // Accumulate into project bucket — prefer the agent's manual projectLabel,
+    // fall back to the directory-derived slug.
+    const agentProjectLabel = agentName != null ? (agentProjectLabels.get(agentName) ?? null) : null;
+    const projectSlug = agentProjectLabel ?? fallbackProjectSlug;
     const projExisting = projectMap.get(projectSlug) ?? { estimatedCost: 0, sessionCount: 0 };
     projExisting.estimatedCost += sessionCost;
     projExisting.sessionCount  += 1;
@@ -795,12 +812,12 @@ async function buildTokenUsageByAgent(range: TimeRange): Promise<ByAgentResponse
   };
 }
 
-export async function getTokenUsageByAgent(range: TimeRange): Promise<ByAgentResponse> {
+export async function getTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLookup): Promise<ByAgentResponse> {
   const now = Date.now();
   const cached = byAgentCache.get(range);
   if (cached && now - cached.ts < BY_AGENT_CACHE_TTL_MS) return cached.data;
 
-  const data = await buildTokenUsageByAgent(range);
+  const data = await buildTokenUsageByAgent(range, agentLookup);
   byAgentCache.set(range, { data, ts: now });
   return data;
 }

@@ -23,4 +23,5 @@ export interface TrackedAgent {
   preview: string;
   headline: string;
   context?: AgentContext;
+  projectLabel?: string | null;
 }

@@ -128,6 +128,21 @@ export const AgentCard = memo(function AgentCard({ agent, accent, saiyan, onClic
           <RenameInline target={agent.target} displayName={displayName} />
         </div>
 
+        {/* ── Project label badge ─────────────────────────────────── */}
+        {agent.projectLabel && (
+          <span
+            className="text-[9px] font-mono px-1.5 py-px rounded-full max-w-[96px] truncate leading-none"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              color: "var(--color-text-muted)",
+              border: "1px solid rgba(255,255,255,0.10)",
+            }}
+            title={agent.projectLabel}
+          >
+            {agent.projectLabel}
+          </span>
+        )}
+
         {/* ── Hover tooltip ──────────────────────────────────────── */}
         {hovered && (
           <div
@@ -143,6 +158,9 @@ export const AgentCard = memo(function AgentCard({ agent, accent, saiyan, onClic
               {agent.status} · {agent.target}
               {agent.isWorker && (
                 <span className="ml-1.5 text-amber-400/80">· worker</span>
+              )}
+              {agent.projectLabel && (
+                <span className="ml-1.5 text-white/50">· {agent.projectLabel}</span>
               )}
             </div>
             {agent.preview && (
