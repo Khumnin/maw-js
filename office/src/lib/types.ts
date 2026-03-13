@@ -73,3 +73,14 @@ export interface AgentEvent {
   type: "status" | "command" | "saiyan";
   detail: string;
 }
+
+// ── Goals ─────────────────────────────────────────────────────────────────────
+
+export interface Goal {
+  id: string;
+  title: string;
+  status: "in_progress" | "completed";
+  linkedChainIds: string[];
+  createdAt: number;
+  completedAt?: number;
+}

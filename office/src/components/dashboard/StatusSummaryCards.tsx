@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/cn";
 import type { TrackedAgent } from "@/lib/types";
 
 interface StatusSummaryCardsProps {
@@ -19,13 +18,13 @@ interface StatCardProps {
 function StatCard({ label, value, accent, highlight }: StatCardProps) {
   return (
     <Card
-      className={cn(
-        "flex-1 min-w-0 gap-0 rounded-lg border py-4",
-        highlight && value > 0 && "border-orange-500/30"
-      )}
+      className="flex-1 min-w-0 gap-0 rounded-lg border py-4"
       style={{
         background: "var(--color-bg-surface)",
-        borderColor: highlight && value > 0 ? undefined : "var(--color-border-default)",
+        borderColor:
+          highlight && value > 0
+            ? "var(--color-status-permission-border)"
+            : "var(--color-border-default)",
       }}
     >
       <CardContent className="px-4 py-0">
@@ -62,7 +61,7 @@ export function StatusSummaryCards({ agents, tasksToday }: StatusSummaryCardsPro
   }, [agents]);
 
   return (
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <StatCard label="Total Agents" value={counts.total} />
       <StatCard
         label="Working"

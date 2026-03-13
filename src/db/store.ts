@@ -61,6 +61,17 @@ export function initDb(): void {
       updated_at INTEGER NOT NULL
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS goals (
+      id                   TEXT    PRIMARY KEY,
+      title                TEXT    NOT NULL,
+      status               TEXT    NOT NULL DEFAULT 'in_progress',
+      linked_chain_ids_json TEXT   DEFAULT '[]',
+      created_at           INTEGER NOT NULL,
+      completed_at         INTEGER
+    )
+  `);
 }
 
 // ── Message type ──────────────────────────────────────────────────────────────
@@ -268,6 +279,122 @@ function deserializeMessage(row: Record<string, unknown>): Message {
     body:      row.body as string,
     read:      (row.read as number) === 1,
     createdAt: row.created_at as number,
+  };
+}
+
+// ── Goals CRUD ────────────────────────────────────────────────────────────────
+
+export interface Goal {
+  id: string;
+  title: string;
+  status: "in_progress" | "completed";
+  linkedChainIds: string[];
+  createdAt: number;
+  completedAt?: number;
+}
+
+export function createGoal(title: string): Goal {
+  const db = getDb();
+  const id = crypto.randomUUID();
+  const now = Date.now();
+
+  const stmt = db.prepare(`
+    INSERT INTO goals (id, title, status, linked_chain_ids_json, created_at)
+    VALUES ($id, $title, 'in_progress', '[]', $created_at)
+  `);
+
+  stmt.run({ $id: id, $title: title, $created_at: now });
+
+  return {
+    id,
+    title,
+    status: "in_progress",
+    linkedChainIds: [],
+    createdAt: now,
+  };
+}
+
+export function getGoals(): Goal[] {
+  const db = getDb();
+  const stmt = db.prepare("SELECT * FROM goals ORDER BY created_at DESC");
+  const rows = stmt.all({}) as Record<string, unknown>[];
+  return rows.map(deserializeGoal);
+}
+
+export function updateGoal(
+  id: string,
+  patch: {
+    title?: string;
+    status?: string;
+    linkChainId?: string;
+    unlinkChainId?: string;
+  },
+): Goal | null {
+  const db = getDb();
+
+  const existing = db.prepare("SELECT * FROM goals WHERE id = $id").get({ $id: id }) as Record<string, unknown> | null;
+  if (!existing) return null;
+
+  const current = deserializeGoal(existing);
+
+  const newTitle       = patch.title  !== undefined ? patch.title  : current.title;
+  const newStatus      = patch.status !== undefined ? patch.status : current.status;
+  const completedAt    = newStatus === "completed" && current.status !== "completed"
+    ? Date.now()
+    : (current.completedAt ?? null);
+
+  let chainIds = [...current.linkedChainIds];
+  if (patch.linkChainId && !chainIds.includes(patch.linkChainId)) {
+    chainIds.push(patch.linkChainId);
+  }
+  if (patch.unlinkChainId) {
+    chainIds = chainIds.filter((cid) => cid !== patch.unlinkChainId);
+  }
+
+  const stmt = db.prepare(`
+    UPDATE goals
+    SET title                 = $title,
+        status                = $status,
+        linked_chain_ids_json = $linked_chain_ids_json,
+        completed_at          = $completed_at
+    WHERE id = $id
+  `);
+
+  stmt.run({
+    $id:                    id,
+    $title:                 newTitle,
+    $status:                newStatus,
+    $linked_chain_ids_json: JSON.stringify(chainIds),
+    $completed_at:          completedAt,
+  });
+
+  return {
+    id,
+    title:          newTitle,
+    status:         newStatus as Goal["status"],
+    linkedChainIds: chainIds,
+    createdAt:      current.createdAt,
+    completedAt:    completedAt ?? undefined,
+  };
+}
+
+export function deleteGoal(id: string): boolean {
+  const db = getDb();
+  const stmt = db.prepare("DELETE FROM goals WHERE id = $id");
+  const result = stmt.run({ $id: id });
+  return result.changes > 0;
+}
+
+function deserializeGoal(row: Record<string, unknown>): Goal {
+  return {
+    id:             row.id as string,
+    title:          row.title as string,
+    status:         (row.status as Goal["status"]) ?? "in_progress",
+    linkedChainIds: row.linked_chain_ids_json
+      ? (JSON.parse(row.linked_chain_ids_json as string) as string[])
+      : [],
+    createdAt:   row.created_at as number,
+    completedAt: row.completed_at as number | undefined ?? undefined,
   };
 }
 

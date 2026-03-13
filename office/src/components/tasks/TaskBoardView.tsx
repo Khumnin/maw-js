@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { LinkIcon, XIcon, CheckCircle2Icon, AlertCircleIcon, LoaderIcon, ClockIcon } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { LinkIcon, XIcon, CheckCircle2Icon, AlertCircleIcon, LoaderIcon, ClockIcon, TargetIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useTaskQueue } from "@/hooks/useTaskQueue";
 import { useAgents } from "@/hooks/useAgents";
@@ -7,7 +7,8 @@ import { KanbanBoard } from "./KanbanBoard";
 import { TaskSubmitForm } from "./TaskSubmitForm";
 import { ChainBuilderDialog } from "./ChainBuilderDialog";
 import { cn } from "@/lib/cn";
-import type { TaskChain, ChainStatus } from "@/lib/types";
+import { fetchGoals, updateGoal } from "@/lib/goals-api";
+import type { TaskChain, ChainStatus, Goal } from "@/lib/types";
 
 // ── Chain status helpers ───────────────────────────────────────────────────────
 
@@ -103,6 +104,188 @@ function useChains() {
   return { chains, upsertChain };
 }
 
+// ── LinkToGoalButton ───────────────────────────────────────────────────────────
+
+interface LinkToGoalButtonProps {
+  chainId: string;
+  goals: Goal[];
+  linkedGoalId: string | null;
+  onLinked: (goalId: string, chainId: string) => void;
+}
+
+/**
+ * Small dropdown button that lets the user link a chain to a goal.
+ * Shows which goal the chain is already linked to, if any.
+ */
+function LinkToGoalButton({ chainId, goals, linkedGoalId, onLinked }: LinkToGoalButtonProps) {
+  const [open, setOpen] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const linkedGoal = goals.find((g) => g.id === linkedGoalId);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [open]);
+
+  const handleSelect = useCallback(async (goalId: string) => {
+    setOpen(false);
+    if (goalId === linkedGoalId) return;
+    setLinking(true);
+    try {
+      await updateGoal(goalId, { linkChainId: chainId });
+      onLinked(goalId, chainId);
+      const goal = goals.find((g) => g.id === goalId);
+      toast.success("Chain linked to goal", { description: goal?.title });
+    } catch (err) {
+      toast.error("Failed to link chain", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setLinking(false);
+    }
+  }, [linkedGoalId, chainId, goals, onLinked]);
+
+  const inProgressGoals = goals.filter((g) => g.status === "in_progress");
+
+  return (
+    <div ref={containerRef} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={linkedGoal ? `Linked to goal: ${linkedGoal.title}` : "Link to goal"}
+        disabled={linking}
+        className={cn(
+          "flex items-center justify-center rounded w-6 h-6 border flex-shrink-0",
+          "transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+        )}
+        style={
+          linkedGoal
+            ? {
+                background: "var(--color-accent-success-chip)",
+                borderColor: "var(--color-accent-success-chip-border)",
+                color: "var(--color-accent-success)",
+              }
+            : {
+                background: "transparent",
+                borderColor: "var(--color-border-strong)",
+                color: "var(--color-text-muted)",
+              }
+        }
+      >
+        {linking ? (
+          <LoaderIcon className="size-3 animate-spin" />
+        ) : (
+          <TargetIcon className="size-3" />
+        )}
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Select goal to link"
+          className="absolute right-0 top-full mt-1 z-50 rounded-lg border shadow-xl overflow-hidden min-w-[200px] max-w-[280px]"
+          style={{
+            background: "var(--color-bg-surface)",
+            borderColor: "var(--color-border-strong)",
+          }}
+        >
+          {/* Header */}
+          <div
+            className="px-3 py-2 border-b"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <p
+              className="text-[9px] font-mono uppercase tracking-wider"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Link to goal
+            </p>
+            {linkedGoal && (
+              <p
+                className="text-[10px] truncate mt-0.5"
+                style={{ color: "var(--color-accent-success)" }}
+              >
+                Currently: {linkedGoal.title}
+              </p>
+            )}
+          </div>
+
+          {inProgressGoals.length === 0 ? (
+            <div
+              className="px-3 py-4 text-center text-[10px] italic"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              No in-progress goals
+            </div>
+          ) : (
+            <ul className="flex flex-col py-1 max-h-48 overflow-y-auto">
+              {inProgressGoals.map((goal) => {
+                const isLinked = goal.id === linkedGoalId;
+                return (
+                  <li key={goal.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={isLinked}
+                      onClick={() => handleSelect(goal.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 text-left text-[11px]",
+                        "transition-colors hover:bg-white/[0.05]"
+                      )}
+                      style={{
+                        color: isLinked
+                          ? "var(--color-accent-success)"
+                          : "var(--color-text-primary)",
+                      }}
+                    >
+                      <TargetIcon
+                        className="size-3 shrink-0"
+                        style={{
+                          color: isLinked
+                            ? "var(--color-accent-success)"
+                            : "var(--color-text-muted)",
+                        }}
+                      />
+                      <span className="truncate">{goal.title}</span>
+                      {isLinked && (
+                        <CheckCircle2Icon
+                          className="size-3 shrink-0 ml-auto"
+                          style={{ color: "var(--color-accent-success)" }}
+                        />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 /**
@@ -124,6 +307,42 @@ export function TaskBoardView() {
   const { chains, upsertChain } = useChains();
   const [chainDialogOpen, setChainDialogOpen] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // Goals data for the "Link to Goal" feature
+  const [goals, setGoals] = useState<Goal[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchGoals()
+      .then((g) => { if (!cancelled) setGoals(g); })
+      .catch(() => {
+        // Non-fatal — goals linking is a convenience feature
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Build a map of chainId → goalId for quick lookup
+  const chainGoalMap = goals.reduce<Record<string, string>>((acc, goal) => {
+    for (const chainId of goal.linkedChainIds) {
+      acc[chainId] = goal.id;
+    }
+    return acc;
+  }, {});
+
+  const handleGoalLinked = useCallback((goalId: string, chainId: string) => {
+    setGoals((prev) =>
+      prev.map((g) => {
+        if (g.id === goalId) {
+          return {
+            ...g,
+            linkedChainIds: g.linkedChainIds.includes(chainId)
+              ? g.linkedChainIds
+              : [...g.linkedChainIds, chainId],
+          };
+        }
+        return g;
+      })
+    );
+  }, []);
 
   const totalActive = queue.pending.length + queue.assigned.length;
 
@@ -268,6 +487,14 @@ export function TaskBoardView() {
                     }}
                   />
                 </div>
+
+                {/* Link to Goal button */}
+                <LinkToGoalButton
+                  chainId={chain.id}
+                  goals={goals}
+                  linkedGoalId={chainGoalMap[chain.id] ?? null}
+                  onLinked={handleGoalLinked}
+                />
 
                 {/* Cancel button (active chains only) */}
                 {(chain.status === "pending" || chain.status === "running") && (

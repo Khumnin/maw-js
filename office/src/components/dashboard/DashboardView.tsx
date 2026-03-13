@@ -66,7 +66,7 @@ export function DashboardView({ onSelectAgent }: DashboardViewProps) {
 
   return (
     <div
-      className="flex flex-col gap-5 p-5 min-h-full"
+      className="flex flex-col gap-4 p-4 md:gap-5 md:p-5 min-h-full"
       style={{ background: "var(--color-bg-base)" }}
     >
       {/* Page heading */}

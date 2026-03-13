@@ -7,6 +7,7 @@ import {
   KanbanSquareIcon,
   CoinsIcon,
   MonitorIcon,
+  TargetIcon,
   PlusCircleIcon,
   SendIcon,
   ZapIcon,
@@ -56,6 +57,7 @@ const NAV_ITEMS = [
   { id: "mission",   label: "Go to Mission",    icon: GlobeIcon,         shortcut: "G M" },
   { id: "command",   label: "Go to Command",    icon: TerminalIcon,      shortcut: "G C" },
   { id: "tasks",     label: "Go to Tasks",      icon: KanbanSquareIcon,  shortcut: "G T" },
+  { id: "goals",     label: "Go to Goals",      icon: TargetIcon,        shortcut: "G G" },
   { id: "tokens",    label: "Go to Tokens",     icon: CoinsIcon,         shortcut: "G K" },
   { id: "terminal",  label: "Go to Terminal",   icon: MonitorIcon,       shortcut: "G R" },
 ];

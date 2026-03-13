@@ -14,6 +14,7 @@ import { pathValidator } from "./middleware/path-validator";
 import { initDb } from "./db/store";
 import { mailboxRoutes } from "./db/mailbox";
 import { kvRoutes } from "./db/kv";
+import { goalRoutes } from "./db/goals";
 import { createRpcRoutes } from "./api/rpc";
 import { createDiscoveryRoutes } from "./api/discovery";
 import type { AgentDefinition } from "./types/api.js";
@@ -498,6 +499,7 @@ app.get("/api/usage-limits", async (c) => {
 // Agent-to-Agent communication
 app.route("/api/mailbox", mailboxRoutes);
 app.route("/api/kv", kvRoutes);
+app.route("/api/goals", goalRoutes);
 app.route("/api/rpc", createRpcRoutes(dispatcher, tracker, broadcastToAll));
 app.route("/api/discovery", createDiscoveryRoutes(tracker, capture));
 

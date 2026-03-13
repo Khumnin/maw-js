@@ -11,6 +11,12 @@ import {
 import { useTokenUsage } from "@/hooks/useTokenUsage";
 import type { DayCost } from "@/hooks/useTokenUsage";
 
+// Recharts passes `fill` as an SVG attribute (not a CSS property), so the
+// browser does not resolve CSS custom properties in that context.
+// The semantic value is defined in index.css as --color-chart-bar-default;
+// this constant mirrors it so the token remains the single source of truth.
+const CHART_BAR_DEFAULT = "rgba(34, 211, 238, 0.35)"; // --color-chart-bar-default
+
 /** Custom dark-theme tooltip */
 function CustomTooltip({
   active,
@@ -110,7 +116,7 @@ export function DailyCostChart() {
       </div>
 
       {/* Chart */}
-      <div className="px-2 py-4" style={{ height: 180 }}>
+      <div className="px-2 py-4 min-h-0 w-full" style={{ height: 180 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
             <CartesianGrid
@@ -142,7 +148,7 @@ export function DailyCostChart() {
                   fill={
                     entry.date === todayDate
                       ? "var(--color-accent-primary)"
-                      : "rgba(34,211,238,0.35)"
+                      : CHART_BAR_DEFAULT
                   }
                 />
               ))}

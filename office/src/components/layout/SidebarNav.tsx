@@ -7,6 +7,7 @@ import {
   KanbanSquare,
   Coins,
   Monitor,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -22,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "mission",   label: "Mission",   icon: Globe },
   { id: "command",   label: "Command",   icon: Terminal },
   { id: "tasks",     label: "Tasks",     icon: KanbanSquare },
+  { id: "goals",     label: "Goals",     icon: Target },
   { id: "tokens",    label: "Tokens",    icon: Coins },
   { id: "terminal",  label: "Terminal",  icon: Monitor },
 ];
@@ -31,6 +33,8 @@ interface SidebarNavProps {
   activeRoute: string;
   /** Whether the sidebar is collapsed to icon-only mode */
   collapsed: boolean;
+  /** Called after a nav item is clicked — used to close mobile overlay */
+  onNavClick?: () => void;
 }
 
 /**
@@ -38,11 +42,12 @@ interface SidebarNavProps {
  * Each item navigates via hash route on click and supports full keyboard
  * navigation (Tab + Enter).
  */
-export const SidebarNav = memo(function SidebarNav({ activeRoute, collapsed }: SidebarNavProps) {
+export const SidebarNav = memo(function SidebarNav({ activeRoute, collapsed, onNavClick }: SidebarNavProps) {
   const listRef = useRef<HTMLUListElement>(null);
 
   function navigate(id: string) {
     window.location.hash = id;
+    onNavClick?.();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, id: string) {
@@ -78,13 +83,15 @@ export const SidebarNav = memo(function SidebarNav({ activeRoute, collapsed }: S
                 aria-label={collapsed ? label : undefined}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "w-full flex items-center gap-3 rounded-md px-3 py-2.5",
+                  "w-full flex items-center gap-3 rounded-md px-3",
+                  // Mobile: 44px touch target; desktop: compact
+                  "min-h-[44px] md:min-h-0 md:py-2.5",
                   "text-left transition-all duration-150 outline-none",
                   "focus-visible:ring-2 focus-visible:ring-[var(--color-accent-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg-surface)]",
                   isActive
                     ? "bg-[var(--color-accent-primary)]/10 text-[var(--color-accent-primary)]"
                     : "text-[var(--color-text-secondary)] hover:bg-white/[0.04] hover:text-[var(--color-text-primary)]",
-                  collapsed && "justify-center px-0"
+                  collapsed && "md:justify-center md:px-0"
                 )}
               >
                 <Icon

@@ -23,6 +23,10 @@ const TaskBoardView = lazy(() =>
   import("./components/tasks/TaskBoardView").then((m) => ({ default: m.TaskBoardView }))
 );
 
+const GoalsPanel = lazy(() =>
+  import("./components/goals/GoalsPanel").then((m) => ({ default: m.GoalsPanel }))
+);
+
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash.slice(1) || "office");
   useEffect(() => {
@@ -269,6 +273,31 @@ export function App() {
             }
           >
             <TaskBoardView />
+          </Suspense>
+        </div>
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+      </AppShell>
+    );
+  }
+
+  // ── Goals ────────────────────────────────────────────────────────────────────
+  if (route === "goals") {
+    return (
+      <AppShell route={route} agents={agents} connected={connected}>
+        {globalNotifications}
+        {globalCommandPalette}
+        <div className="overflow-y-auto h-full">
+          <Suspense
+            fallback={
+              <div
+                className="flex items-center justify-center h-full"
+                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+              >
+                <p className="text-[12px] font-mono">Loading goals…</p>
+              </div>
+            }
+          >
+            <GoalsPanel />
           </Suspense>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}

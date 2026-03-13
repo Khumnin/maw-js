@@ -48,6 +48,26 @@
   --color-accent-danger-active: rgba(248, 113, 113, 0.2);
   --color-accent-danger-active-border: rgba(248, 113, 113, 0.4);
 
+  /* Success tints — green (4ade80) at various opacities */
+  --color-accent-success-subtle: rgba(74, 222, 128, 0.08);
+  --color-accent-success-border: rgba(74, 222, 128, 0.15);
+  --color-accent-success-muted: rgba(74, 222, 128, 0.12);
+  --color-accent-success-muted-border: rgba(74, 222, 128, 0.25);
+  /* Extra tints used by GoalCard mark-complete button and LinkToGoalButton */
+  --color-accent-success-faint: rgba(74, 222, 128, 0.06);
+  --color-accent-success-faint-border: rgba(74, 222, 128, 0.2);
+  --color-accent-success-chip: rgba(74, 222, 128, 0.1);
+  --color-accent-success-chip-border: rgba(74, 222, 128, 0.3);
+
+  /* Status — permission/orange border */
+  --color-status-permission-border: rgba(249, 115, 22, 0.3);
+
+  /* Chart — default bar fill (cyan at low opacity).
+     NOTE: Recharts sets fill as an SVG attribute, so CSS vars are not resolved
+     by the browser in that context. Mirror this value in DailyCostChart.tsx as
+     CHART_BAR_DEFAULT. */
+  --color-chart-bar-default: rgba(34, 211, 238, 0.35);
+
   /* Tag subtle tints (active chip backgrounds) */
   --color-tag-backend-subtle: rgba(139, 92, 246, 0.2);
   --color-tag-backend-border: rgba(139, 92, 246, 0.4);

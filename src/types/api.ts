@@ -94,3 +94,20 @@ export const RpcCallSchema = z.object({
 });
 
 export type RpcCallInput = z.infer<typeof RpcCallSchema>;
+
+// ── Goals ─────────────────────────────────────────────────────────────────────
+
+export const CreateGoalSchema = z.object({
+  title: z.string().min(1, "title required").max(200, "title too long (max 200 chars)"),
+});
+
+export type CreateGoalInput = z.infer<typeof CreateGoalSchema>;
+
+export const UpdateGoalSchema = z.object({
+  title:         z.string().min(1).max(200).optional(),
+  status:        z.enum(["in_progress", "completed"]).optional(),
+  linkChainId:   z.string().min(1).optional(),
+  unlinkChainId: z.string().min(1).optional(),
+});
+
+export type UpdateGoalInput = z.infer<typeof UpdateGoalSchema>;

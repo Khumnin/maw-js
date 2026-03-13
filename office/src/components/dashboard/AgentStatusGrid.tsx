@@ -15,6 +15,11 @@ interface AgentStatusGridProps {
  * AgentStatusGrid — live table of all tracked agents.
  * Click a row to open the TerminalModal for that agent.
  *
+ * Responsive behaviour:
+ * - Mobile (<768px): single-column card layout — name + status badge only.
+ *   Context, project, and details button are hidden to prevent overflow.
+ * - Desktop (≥768px): multi-column table with all fields visible.
+ *
  * Note: TrackedAgent from the WS push does not include the `active`,
  * `windowIndex`, `preview`, or `isWorker` fields that AgentState does.
  * We bridge to AgentState by casting the available fields so the
@@ -44,9 +49,9 @@ export function AgentStatusGrid({ agents, onSelectAgent, onShowDetails }: AgentS
         borderColor: "var(--color-border-default)",
       }}
     >
-      {/* Header */}
+      {/* ── Desktop header (hidden on mobile) ────────────────────────────── */}
       <div
-        className="grid grid-cols-[1fr_auto_1fr_auto_auto] gap-3 px-4 py-2 border-b text-[10px] font-medium uppercase tracking-widest"
+        className="hidden md:grid md:grid-cols-[1fr_auto_1fr_auto_auto] gap-3 px-4 py-2 border-b text-[10px] font-medium uppercase tracking-widest"
         style={{
           borderColor: "var(--color-border-default)",
           color: "var(--color-text-muted)",
@@ -59,7 +64,7 @@ export function AgentStatusGrid({ agents, onSelectAgent, onShowDetails }: AgentS
         <span />
       </div>
 
-      {/* Rows */}
+      {/* ── Rows ─────────────────────────────────────────────────────────── */}
       <div className="divide-y" style={{ borderColor: "var(--color-border-subtle)" }}>
         {agents.map((agent) => {
           // Bridge TrackedAgent → AgentState for the TerminalModal callback
@@ -77,60 +82,88 @@ export function AgentStatusGrid({ agents, onSelectAgent, onShowDetails }: AgentS
           return (
             <div
               key={agent.target}
-              className="grid grid-cols-[1fr_auto_1fr_auto_auto] gap-3 w-full px-4 py-2.5 items-center group"
+              className="group"
               style={{ borderColor: "var(--color-border-subtle)" }}
             >
-              {/* Clickable row area */}
+              {/* ── Mobile row: full-width button, single column ─────────── */}
               <button
                 type="button"
                 onClick={() => onSelectAgent(agentState)}
                 className={cn(
-                  "contents text-left transition-colors"
+                  "md:hidden w-full flex items-center justify-between gap-3 px-4",
+                  "min-h-[52px] text-left transition-colors hover:bg-white/[0.03]",
+                  "focus-visible:outline-none focus-visible:bg-white/[0.04]"
                 )}
+                aria-label={`Open terminal for ${agent.windowName}`}
               >
-                {/* Name */}
                 <span
-                  className="text-[12px] font-mono truncate group-hover:text-white transition-colors cursor-pointer"
+                  className="text-[12px] font-mono truncate flex-1"
                   style={{ color: "var(--color-text-primary)" }}
                   title={agent.target}
                 >
                   {agent.windowName}
                 </span>
-
-                {/* Status badge */}
                 <StatusBadge status={agent.status} />
-
-                {/* Headline / context */}
-                <span
-                  className="text-[11px] truncate cursor-pointer"
-                  style={{ color: "var(--color-text-muted)" }}
-                  title={agent.headline}
-                >
-                  {agent.headline || agent.preview.slice(0, 60) || "—"}
-                </span>
-
-                {/* Project name */}
-                <span
-                  className="text-[11px] truncate text-right cursor-pointer"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  {agent.context?.projectName ?? "—"}
-                </span>
               </button>
 
-              {/* Details button */}
-              {onShowDetails && (
+              {/* ── Desktop row: multi-column grid ───────────────────────── */}
+              <div
+                className="hidden md:grid md:grid-cols-[1fr_auto_1fr_auto_auto] gap-3 w-full px-4 py-2.5 items-center group"
+                style={{ borderColor: "var(--color-border-subtle)" }}
+              >
+                {/* Clickable row area */}
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onShowDetails(agent); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-white/[0.08]"
-                  aria-label={`Show details for ${agent.windowName}`}
-                  title="Agent details"
-                  style={{ color: "var(--color-accent-primary)" }}
+                  onClick={() => onSelectAgent(agentState)}
+                  className="contents text-left transition-colors"
                 >
-                  <InfoIcon className="size-3.5" />
+                  {/* Name */}
+                  <span
+                    className="text-[12px] font-mono truncate group-hover:text-white transition-colors cursor-pointer"
+                    style={{ color: "var(--color-text-primary)" }}
+                    title={agent.target}
+                  >
+                    {agent.windowName}
+                  </span>
+
+                  {/* Status badge */}
+                  <StatusBadge status={agent.status} />
+
+                  {/* Headline / context */}
+                  <span
+                    className="text-[11px] truncate cursor-pointer"
+                    style={{ color: "var(--color-text-muted)" }}
+                    title={agent.headline}
+                  >
+                    {agent.headline || agent.preview.slice(0, 60) || "—"}
+                  </span>
+
+                  {/* Project name */}
+                  <span
+                    className="text-[11px] truncate text-right cursor-pointer"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    {agent.context?.projectName ?? "—"}
+                  </span>
                 </button>
-              )}
+
+                {/* Details button */}
+                {onShowDetails && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShowDetails(agent);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-white/[0.08]"
+                    aria-label={`Show details for ${agent.windowName}`}
+                    title="Agent details"
+                    style={{ color: "var(--color-accent-primary)" }}
+                  >
+                    <InfoIcon className="size-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
