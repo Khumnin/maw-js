@@ -1,11 +1,19 @@
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
+import { resolve } from "path";
 
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   root: ".",
   base: "/office/",
+  resolve: {
+    alias: {
+      // Allow frontend to import shared types from the backend src/types directory.
+      // Usage in frontend: import type { Task } from "@shared/task"
+      "@shared": resolve(__dirname, "../src/types"),
+    },
+  },
   build: {
     outDir: "../dist-office",
     emptyOutDir: true,

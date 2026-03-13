@@ -35,11 +35,9 @@ jobs:
 
       # ── Type check: src/ via root tsconfig ─────────────────────────────────
       # Run as a separate step so type errors are visible even if lint passes.
-      # Using || true so pre-existing type errors don't block the pipeline
-      # while the team addresses them (tracked separately).
       - name: Type check (backend)
-        run: bun run tsc --noEmit || true
+        run: bun run tsc --noEmit
 
       # ── Type check: office/src/ via office/tsconfig.json ───────────────────
       - name: Type check (office)
-        run: cd office && bunx tsc --noEmit || true
+        run: cd office && bunx tsc --noEmit

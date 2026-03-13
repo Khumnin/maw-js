@@ -1,21 +1,19 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname } from "node:path";
+import { MAW_DB_PATH } from "../paths";
 
 // ── DB path ───────────────────────────────────────────────────────────────────
-
-const DB_DIR = join(homedir(), ".config", "maw");
-const DB_PATH = join(DB_DIR, "maw.db");
 
 let _db: Database | null = null;
 
 export function getDb(): Database {
   if (_db) return _db;
-  if (!existsSync(DB_DIR)) {
-    mkdirSync(DB_DIR, { recursive: true });
+  const dbDir = dirname(MAW_DB_PATH);
+  if (!existsSync(dbDir)) {
+    mkdirSync(dbDir, { recursive: true });
   }
-  _db = new Database(DB_PATH, { create: true });
+  _db = new Database(MAW_DB_PATH, { create: true });
   _db.run("PRAGMA journal_mode = WAL");
   _db.run("PRAGMA foreign_keys = ON");
   return _db;

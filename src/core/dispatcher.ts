@@ -1,59 +1,18 @@
 import type { AgentTracker, TrackedAgent } from "./agent-tracker.js";
 import { upsertTask } from "../db/store.js";
 import { capture } from "../services/ssh.js";
+import type {
+  TaskPriority,
+  TaskStatus,
+  TaskAffinity,
+  Task,
+  ChainStatus,
+  TaskChainStep,
+  TaskChain,
+} from "../types/task.js";
 
-export type TaskPriority = "high" | "normal" | "low";
-export type TaskStatus = "pending" | "assigned" | "completed" | "failed";
-
-export interface TaskAffinity {
-  tags?: string[];        // preferred tags: ['backend', 'frontend', 'infra']
-  projectName?: string;  // preferred project name
-  filePaths?: string[];  // related file paths
-  preferAgent?: string;  // explicitly prefer a specific agent target
-}
-
-export interface Task {
-  id: string;
-  command: string;
-  priority: TaskPriority;
-  status: TaskStatus;
-  assignedTo?: string;      // worker target (e.g. "worker-1:0")
-  assignedToName?: string;  // worker session name (e.g. "worker-1")
-  assignedAt?: number;
-  completedAt?: number;
-  createdAt: number;
-  retryCount: number;
-  maxRetries: number;
-  timeout: number;          // ms, default 300_000 (5 min)
-  output?: string;
-  affinity?: TaskAffinity;
-  dispatchReason?: string;  // human-readable explanation of why this agent was chosen
-  // Chain fields
-  chainId?: string;
-  chainIndex?: number;
-}
-
-// ── Task Chain types ──────────────────────────────────────────────────────────
-
-export type ChainStatus = "pending" | "running" | "completed" | "failed";
-
-export interface TaskChainStep {
-  prompt: string;
-  targetTag?: string;  // 'backend' | 'frontend' | 'any' — currently unused, for future routing
-  dependsOn?: number;  // step index this depends on (currently sequential only)
-}
-
-export interface TaskChain {
-  id: string;
-  name: string;
-  steps: TaskChainStep[];
-  status: ChainStatus;
-  currentStep: number;
-  taskIds: string[];   // task IDs created for each step (sparse — only submitted steps)
-  priority: TaskPriority;
-  createdAt: number;
-  completedAt?: number;
-}
+// Re-export so existing importers of dispatcher.ts continue to work.
+export type { TaskPriority, TaskStatus, TaskAffinity, Task, ChainStatus, TaskChainStep, TaskChain };
 
 const PRIORITY_ORDER: Record<TaskPriority, number> = { high: 0, normal: 1, low: 2 };
 const MAX_HISTORY = 50;

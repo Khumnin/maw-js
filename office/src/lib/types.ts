@@ -1,3 +1,42 @@
+// ── Shared types — imported from the backend /src/types/ via @shared alias ────
+//
+// All types used across backend and frontend are defined in /src/types/*.ts.
+// This file re-exports everything so existing component imports continue to work
+// without any changes to the component files.
+
+export type {
+  AgentStatus,
+  AgentContext,
+  TrackedAgent,
+} from "@shared/agent";
+
+export type {
+  TaskPriority,
+  TaskStatus,
+  ChainStatus,
+  TaskAffinity,
+  Task,
+  TaskChainStep,
+  TaskChain,
+  QueueStatus,
+} from "@shared/task";
+
+export type {
+  RpcCall,
+  AgentDefinition,
+} from "@shared/api";
+
+export type {
+  ServerToClientMsg,
+  ClientToServerMsg,
+} from "@shared/ws";
+
+// ── Frontend-only types (not shared with backend) ─────────────────────────────
+//
+// These types are used only within the React office app and have no backend
+// counterpart. They are defined here rather than in /src/types/ to avoid
+// pulling React/browser-only concerns into the Bun backend.
+
 export interface Window {
   index: number;
   name: string;
@@ -9,7 +48,12 @@ export interface Session {
   windows: Window[];
 }
 
-export type PaneStatus = "working" | "waiting" | "permission" | "error" | "idle";
+/** UI-level status type used by useSessions — matches AgentStatus but kept
+ *  as an alias to give components a semantic name for the polling hook. */
+export type PaneStatus = AgentStatus;
+
+// Re-import to satisfy the PaneStatus alias above without a circular reference
+import type { AgentStatus } from "@shared/agent";
 
 export interface AgentState {
   target: string;
@@ -26,89 +70,4 @@ export interface AgentEvent {
   target: string;
   type: "status" | "command" | "saiyan";
   detail: string;
-}
-
-// ── Command Center types ───────────────────────────────────────────────────────
-
-export type AgentStatus = "working" | "waiting" | "permission" | "error" | "idle";
-export type TaskPriority = "high" | "normal" | "low";
-export type TaskStatus = "pending" | "assigned" | "completed" | "failed";
-
-export interface AgentContext {
-  workingDir: string | null;
-  recentFiles: string[];
-  detectedStack: string[];
-  projectName: string | null;
-  lastActiveAt: number;
-  tags: string[];
-}
-
-export interface TrackedAgent {
-  target: string;
-  sessionName: string;
-  windowIndex: number;
-  windowName: string;
-  status: AgentStatus;
-  isWorker: boolean;
-  currentTaskId?: string;
-  lastActivityAt: number;
-  preview: string;
-  headline: string;
-  context?: AgentContext;
-}
-
-export interface TaskAffinity {
-  tags?: string[];
-  projectName?: string;
-  filePaths?: string[];
-  preferAgent?: string;
-}
-
-export interface Task {
-  id: string;
-  command: string;
-  priority: TaskPriority;
-  status: TaskStatus;
-  assignedTo?: string;
-  assignedToName?: string;
-  assignedAt?: number;
-  completedAt?: number;
-  createdAt: number;
-  retryCount: number;
-  maxRetries: number;
-  timeout: number;
-  output?: string;
-  affinity?: TaskAffinity;
-  dispatchReason?: string;
-  // Chain linkage
-  chainId?: string;
-  chainIndex?: number;
-}
-
-export interface QueueStatus {
-  pending: Task[];
-  assigned: Task[];
-  history: Task[];
-}
-
-// ── Task Chain types ──────────────────────────────────────────────────────────
-
-export type ChainStatus = "pending" | "running" | "completed" | "failed";
-
-export interface TaskChainStep {
-  prompt: string;
-  targetTag?: string;  // 'backend' | 'frontend' | 'any'
-  dependsOn?: number;  // step index this depends on
-}
-
-export interface TaskChain {
-  id: string;
-  name: string;
-  steps: TaskChainStep[];
-  status: ChainStatus;
-  currentStep: number;
-  taskIds: string[];
-  priority: TaskPriority;
-  createdAt: number;
-  completedAt?: number;
 }

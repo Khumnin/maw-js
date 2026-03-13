@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { homedir } from "os";
 import { join } from "path";
+import { MAW_DATA_DIR } from "./paths";
 
-const CONFIG_DIR = join(homedir(), ".config", "maw");
+const CONFIG_DIR = MAW_DATA_DIR;
 const CONFIG_FILE = join(CONFIG_DIR, "agents.json");
 
 export interface AgentConfig {

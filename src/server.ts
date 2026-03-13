@@ -10,11 +10,24 @@ import type { ServerWebSocket } from "bun";
 import { readdir, readFile, access } from "fs/promises";
 import { join, dirname, resolve, isAbsolute } from "path";
 import { homedir } from "node:os";
+import { pathValidator } from "./middleware/path-validator";
 import { initDb } from "./db/store";
 import { mailboxRoutes } from "./db/mailbox";
 import { kvRoutes } from "./db/kv";
 import { createRpcRoutes } from "./api/rpc";
 import { createDiscoveryRoutes } from "./api/discovery";
+import type { AgentDefinition } from "./types/api.js";
+import { SubmitTaskSchema, CancelTaskSchema, SubmitChainSchema, WorkerActionSchema, SpawnAgentSchema } from "./types/api.js";
+import { MAW_AGENTS_DIR, MAW_UPLOAD_DIR } from "./paths";
+
+// ── Path-validator allowed roots ───────────────────────────────────────────────
+// homedir() is always trusted (user's own files).
+// MAW_UPLOAD_DIR is included so the upload staging area is always reachable.
+// Additional roots can be injected via MAW_ALLOWED_ROOTS (colon-separated).
+const extraRoots = process.env.MAW_ALLOWED_ROOTS
+  ? process.env.MAW_ALLOWED_ROOTS.split(":").filter(Boolean)
+  : [];
+const ALLOWED_ROOTS: string[] = [homedir(), MAW_UPLOAD_DIR, ...extraRoots];
 
 const app = new Hono();
 app.use("/api/*", cors());
@@ -58,26 +71,34 @@ app.get("/api/queue", (c) => {
 
 app.post("/api/queue/submit", async (c) => {
   try {
-    const body = await c.req.json();
-    const { command, priority, affinity } = body;
-    if (!command || typeof command !== "string") {
-      return c.json({ error: "command required" }, 400);
+    const raw = await c.req.json();
+    const parsed = SubmitTaskSchema.safeParse(raw);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return c.json({ error: issue?.message ?? "invalid request" }, 400);
     }
+    const { command, priority, affinity } = parsed.data;
     const task = dispatcher.submitTask(command, priority, undefined, undefined, affinity);
     return c.json({ ok: true, task });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
 app.post("/api/queue/cancel", async (c) => {
   try {
-    const { taskId } = await c.req.json();
-    if (!taskId) return c.json({ error: "taskId required" }, 400);
-    const ok = dispatcher.cancelTask(taskId);
+    const raw = await c.req.json();
+    const parsed = CancelTaskSchema.safeParse(raw);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return c.json({ error: issue?.message ?? "invalid request" }, 400);
+    }
+    const ok = dispatcher.cancelTask(parsed.data.taskId);
     return c.json({ ok });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -89,35 +110,32 @@ app.get("/api/agents", (c) => {
 
 app.post("/api/agents/worker", async (c) => {
   try {
-    const { sessionName, action } = await c.req.json();
-    if (!sessionName || typeof sessionName !== "string") {
-      return c.json({ error: "sessionName required" }, 400);
+    const raw = await c.req.json();
+    const parsed = WorkerActionSchema.safeParse(raw);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return c.json({ error: issue?.message ?? "invalid request" }, 400);
     }
+    const { sessionName, action } = parsed.data;
     if (action === "add") {
       addWorker(sessionName);
       tracker.refreshWorkerFlags();
       broadcastToAll({ type: "agents-updated", agents: tracker.getAll() });
       return c.json({ ok: true, action: "added", sessionName });
-    } else if (action === "remove") {
+    } else {
       removeWorker(sessionName);
       tracker.refreshWorkerFlags();
       broadcastToAll({ type: "agents-updated", agents: tracker.getAll() });
       return c.json({ ok: true, action: "removed", sessionName });
     }
-    return c.json({ error: "action must be 'add' or 'remove'" }, 400);
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
 // ── Agent Definitions ──────────────────────────────────────────────────────────
-
-export interface AgentDefinition {
-  name: string;
-  description: string;
-  model: string;
-  file: string;
-}
+// AgentDefinition is imported from ./types/api.js
 
 function parseAgentFrontmatter(content: string): { name?: string; description?: string; model?: string } {
   const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
@@ -138,7 +156,7 @@ function parseAgentFrontmatter(content: string): { name?: string; description?: 
 
 app.get("/api/agent-definitions", async (c) => {
   try {
-    const agentsDir = join(process.env.HOME || "/root", ".claude", "agents");
+    const agentsDir = MAW_AGENTS_DIR;
     const files = await readdir(agentsDir);
     const mdFiles = files.filter((f) => f.endsWith(".md"));
 
@@ -161,25 +179,32 @@ app.get("/api/agent-definitions", async (c) => {
     }
 
     return c.json(definitions);
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
 // ── Agent Spawner ──────────────────────────────────────────────────────────────
 
-app.post("/api/agents/spawn", async (c) => {
+app.post(
+  "/api/agents/spawn",
+  pathValidator({ allowedRoots: ALLOWED_ROOTS, bodyFields: ["workDir"] }),
+  async (c) => {
   try {
-    const body = await c.req.json();
-    const { name, workDir, initialPrompt, agentName } = body;
-    if (!name || typeof name !== "string") {
-      return c.json({ error: "name required" }, 400);
+    const raw = await c.req.json();
+    const parsed = SpawnAgentSchema.safeParse(raw);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return c.json({ error: issue?.message ?? "invalid request" }, 400);
     }
-    await spawnAgent(name, workDir, initialPrompt, undefined, agentName || undefined);
+    const { name, workDir, initialPrompt, agentName } = parsed.data;
+    await spawnAgent(name, workDir, initialPrompt, undefined, agentName);
     broadcastToAll({ type: "agent-spawned", sessionName: name });
     return c.json({ ok: true, sessionName: name });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -191,23 +216,18 @@ app.get("/api/chain", (c) => {
 
 app.post("/api/chain/submit", async (c) => {
   try {
-    const body = await c.req.json();
-    const { name, steps, priority } = body;
-    if (!name || typeof name !== "string") {
-      return c.json({ error: "name required" }, 400);
+    const raw = await c.req.json();
+    const parsed = SubmitChainSchema.safeParse(raw);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return c.json({ error: issue?.message ?? "invalid request" }, 400);
     }
-    if (!Array.isArray(steps) || steps.length === 0) {
-      return c.json({ error: "steps array required (non-empty)" }, 400);
-    }
-    for (const step of steps) {
-      if (!step.prompt || typeof step.prompt !== "string") {
-        return c.json({ error: "each step must have a prompt string" }, 400);
-      }
-    }
+    const { name, steps, priority } = parsed.data;
     const chain = dispatcher.submitChain(name, steps, priority);
     return c.json({ ok: true, chain });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -248,8 +268,9 @@ app.delete("/api/agents/:target", async (c) => {
     await killSession(target);
     broadcastToAll({ type: "agent-killed", target });
     return c.json({ ok: true, target });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -263,8 +284,9 @@ app.patch("/api/agents/:target/name", async (c) => {
     await renameWindow(target, name);
     broadcastToAll({ type: "agent-renamed", target, name });
     return c.json({ ok: true, name });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -275,8 +297,9 @@ app.delete("/api/sessions/:name", async (c) => {
     await killEntireSession(name);
     broadcastToAll({ type: "session-killed", sessionName: name });
     return c.json({ ok: true, sessionName: name });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -292,18 +315,22 @@ app.post("/api/upload", async (c) => {
     const timestamp = Date.now();
     const originalName = f.name || "upload";
     const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-    const path = `/tmp/maw-upload-${timestamp}-${safeName}`;
+    const path = join(MAW_UPLOAD_DIR, `maw-upload-${timestamp}-${safeName}`);
     const arrayBuffer = await f.arrayBuffer();
     await Bun.write(path, arrayBuffer);
     return c.json({ path, originalName, size: f.size });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
 // ── Directory Browse API ───────────────────────────────────────────────────────
 
-app.get("/api/browse", async (c) => {
+app.get(
+  "/api/browse",
+  pathValidator({ allowedRoots: ALLOWED_ROOTS, queryParams: ["path"] }),
+  async (c) => {
   try {
     const home = homedir();
     const rawPath = c.req.query("path") || home;
@@ -325,14 +352,18 @@ app.get("/api/browse", async (c) => {
       parent: parent !== resolved ? parent : null,
       dirs,
     });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 400);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 400);
   }
 });
 
 // ── Open File API ──────────────────────────────────────────────────────────────
 
-app.post("/api/open-file", async (c) => {
+app.post(
+  "/api/open-file",
+  pathValidator({ allowedRoots: ALLOWED_ROOTS, bodyFields: ["path", "cwd"] }),
+  async (c) => {
   try {
     const body = await c.req.json() as { path?: unknown; cwd?: unknown };
     const rawPath = body.path;
@@ -405,8 +436,9 @@ app.get("/api/oracle/search", async (c) => {
   try {
     const res = await fetch(`${ORACLE_URL}/api/search?${params}`);
     return c.json(await res.json());
-  } catch (e: any) {
-    return c.json({ error: `Oracle unreachable: ${e.message}` }, 502);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: `Oracle unreachable: ${msg}` }, 502);
   }
 });
 
@@ -415,8 +447,9 @@ app.get("/api/oracle/traces", async (c) => {
   try {
     const res = await fetch(`${ORACLE_URL}/api/traces?limit=${limit}`);
     return c.json(await res.json());
-  } catch (e: any) {
-    return c.json({ error: `Oracle unreachable: ${e.message}` }, 502);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: `Oracle unreachable: ${msg}` }, 502);
   }
 });
 
@@ -424,8 +457,9 @@ app.get("/api/oracle/stats", async (c) => {
   try {
     const res = await fetch(`${ORACLE_URL}/api/stats`);
     return c.json(await res.json());
-  } catch (e: any) {
-    return c.json({ error: `Oracle unreachable: ${e.message}` }, 502);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: `Oracle unreachable: ${msg}` }, 502);
   }
 });
 
@@ -435,8 +469,9 @@ app.get("/api/token-usage", async (c) => {
   try {
     const data = await getTokenUsage();
     return c.json(data);
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -444,8 +479,9 @@ app.get("/api/token-usage/realtime", async (c) => {
   try {
     const data = await getRealtimeSessions();
     return c.json(data);
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -453,8 +489,9 @@ app.get("/api/usage-limits", async (c) => {
   try {
     const data = await getUsageLimits();
     return c.json(data);
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
   }
 });
 
@@ -482,8 +519,9 @@ async function pushCapture(ws: ServerWebSocket<WSData>) {
       lastContent.set(ws, content);
       ws.send(JSON.stringify({ type: "capture", target: ws.data.target, content }));
     }
-  } catch (e: any) {
-    ws.send(JSON.stringify({ type: "error", error: e.message }));
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    ws.send(JSON.stringify({ type: "error", error: msg }));
   }
 }
 
@@ -557,7 +595,10 @@ export function startServer(port = +(process.env.MAW_PORT || 3456)) {
                 // Push capture after short delay to show result
                 setTimeout(() => pushCapture(ws), 300);
               })
-              .catch(e => ws.send(JSON.stringify({ type: "error", error: e.message })));
+              .catch((e: unknown) => {
+                const errMsg = e instanceof Error ? e.message : String(e);
+                ws.send(JSON.stringify({ type: "error", error: errMsg }));
+              });
           } else if (data.type === "submit-task") {
             const task = dispatcher.submitTask(data.command, data.priority, undefined, undefined, data.affinity);
             ws.send(JSON.stringify({ type: "task-submitted", task }));
@@ -568,8 +609,9 @@ export function startServer(port = +(process.env.MAW_PORT || 3456)) {
             try {
               const chain = dispatcher.submitChain(data.name, data.steps, data.priority);
               ws.send(JSON.stringify({ type: "chain-submitted", chain }));
-            } catch (e: any) {
-              ws.send(JSON.stringify({ type: "error", error: e.message }));
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : String(e);
+              ws.send(JSON.stringify({ type: "error", error: msg }));
             }
           } else if (data.type === "cancel-chain") {
             const ok = dispatcher.cancelChain(data.chainId);
@@ -580,7 +622,10 @@ export function startServer(port = +(process.env.MAW_PORT || 3456)) {
                 .then(() => {
                   broadcastToAll({ type: "agent-killed", target: data.target });
                 })
-                .catch((e: any) => ws.send(JSON.stringify({ type: "error", error: e.message })));
+                .catch((e: unknown) => {
+                  const msg = e instanceof Error ? e.message : String(e);
+                  ws.send(JSON.stringify({ type: "error", error: msg }));
+                });
             }
           } else if (data.type === "toggle-worker") {
             const { sessionName } = data;

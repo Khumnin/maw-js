@@ -2,25 +2,16 @@ import { Hono } from "hono";
 import { capture } from "../services/ssh.js";
 import type { AgentTracker, TrackedAgent } from "../core/agent-tracker.js";
 import type { TaskDispatcher, Task } from "../core/dispatcher.js";
+import type { RpcCall } from "../types/api.js";
+import { RpcCallSchema } from "../types/api.js";
 
-export interface RpcCall {
-  id: string;
-  from: string;           // caller agent session name
-  to: string;             // target agent session name
-  prompt: string;         // the work to do
-  taskId: string;         // underlying dispatcher task ID
-  status: "pending" | "running" | "completed" | "failed" | "timeout";
-  output?: string;        // captured output from target agent
-  createdAt: number;
-  completedAt?: number;
-  timeout: number;        // ms, default 120000
-}
+// Re-export RpcCall so existing importers of rpc.ts continue to work.
+export type { RpcCall };
 
 // In-memory store — RPC calls are transient
 const rpcCalls = new Map<string, RpcCall>();
 
 const DEFAULT_TIMEOUT_MS = 120_000;
-const MAX_TIMEOUT_MS     = 300_000;
 const POLL_INTERVAL_MS   = 2_000;
 
 export function createRpcRoutes(
@@ -32,28 +23,21 @@ export function createRpcRoutes(
 
   // POST /call — initiate an agent-to-agent RPC
   router.post("/call", async (c) => {
-    let body: { from?: unknown; to?: unknown; prompt?: unknown; timeout?: unknown };
+    let rawBody: unknown;
     try {
-      body = await c.req.json();
+      rawBody = await c.req.json();
     } catch {
       return c.json({ error: "invalid JSON body" }, 400);
     }
 
-    const { from, to, prompt, timeout: timeoutRaw } = body;
-
-    if (!from || typeof from !== "string") {
-      return c.json({ error: "from (caller session name) required" }, 400);
-    }
-    if (!to || typeof to !== "string") {
-      return c.json({ error: "to (target session name) required" }, 400);
-    }
-    if (!prompt || typeof prompt !== "string") {
-      return c.json({ error: "prompt required" }, 400);
+    const parsed = RpcCallSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return c.json({ error: issue?.message ?? "invalid request" }, 400);
     }
 
-    const timeoutMs = typeof timeoutRaw === "number"
-      ? Math.min(Math.max(timeoutRaw, 1_000), MAX_TIMEOUT_MS)
-      : DEFAULT_TIMEOUT_MS;
+    const { from, to, prompt, timeout: timeoutRaw } = parsed.data;
+    const timeoutMs = timeoutRaw ?? DEFAULT_TIMEOUT_MS;
 
     // Resolve target agent by session name
     const agents: TrackedAgent[] = tracker.getAll();

@@ -7,7 +7,11 @@
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@shared": ["../src/types/index.ts"],
+      "@shared/*": ["../src/types/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../src/types"]
 }

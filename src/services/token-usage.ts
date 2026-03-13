@@ -10,6 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { capture } from "./ssh";
 import type { Session } from "./ssh";
+import { MAW_CLAUDE_DIR } from "../paths";
 
 // ── Pricing (per million tokens) ─────────────────────────────────────────────
 
@@ -127,10 +128,12 @@ export interface UsageLimits {
 
 // ── JSONL dir ─────────────────────────────────────────────────────────────────
 
-const JSONL_DIR = path.join(
-  process.env.HOME || "/tmp",
-  ".claude/projects/-Users-kanatekhumnin-Project"
-);
+// MAW_CLAUDE_DIR points to the Claude config root (default: ~/.claude).
+// The projects sub-directory is where Claude Code stores session JSONL files.
+// MAW_CLAUDE_PROJECTS_DIR can override the full path when the project slug differs.
+const JSONL_DIR = process.env.MAW_CLAUDE_PROJECTS_DIR
+  ? path.resolve(process.env.MAW_CLAUDE_PROJECTS_DIR)
+  : path.join(MAW_CLAUDE_DIR, "projects/-Users-kanatekhumnin-Project");
 
 // ── Cache (30-second TTL for token usage, 10-second for limits) ──────────────
 
@@ -448,8 +451,8 @@ function fmtCountdown(ms: number): string {
 function readNotificationStates(): boolean {
   try {
     const notifPath = path.join(
-      process.env.HOME || "/tmp",
-      ".claude/config/notification_states.json"
+      MAW_CLAUDE_DIR,
+      "config/notification_states.json"
     );
     const raw = fs.readFileSync(notifPath, "utf8");
     const parsed = JSON.parse(raw);
