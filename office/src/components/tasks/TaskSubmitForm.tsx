@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { SendIcon, XIcon, PlusIcon } from "lucide-react";
+import { SendIcon, XIcon, PlusIcon, BookmarkPlusIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   Select,
@@ -11,6 +11,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import type { TrackedAgent, TaskPriority } from "@/lib/types";
+import { saveTemplate } from "@/lib/task-templates";
+import type { TaskTemplate } from "@/lib/task-templates";
+import { TaskTemplatesPicker } from "./TaskTemplatesPicker";
 
 // ── Auto-detect affinity tags ─────────────────────────────────────────────────
 
@@ -57,6 +60,7 @@ export function TaskSubmitForm({ agents }: TaskSubmitFormProps) {
   const [projectName, setProjectName] = useState("");
   const [preferAgent, setPreferAgent] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   // ── Auto-detect tags from command ─────────────────────────────────────────
 
@@ -144,6 +148,53 @@ export function TaskSubmitForm({ agents }: TaskSubmitFormProps) {
     [command, priority, tags, projectName, preferAgent]
   );
 
+  // ── Template integration ─────────────────────────────────────────────────
+
+  /** Populate form fields from a saved template */
+  const handleLoadTemplate = useCallback((template: TaskTemplate) => {
+    setCommand(template.command);
+    if (template.affinity?.tags) {
+      const validTags = template.affinity.tags.filter((t): t is AffinityTag =>
+        (ALL_TAGS as readonly string[]).includes(t)
+      );
+      setTags(new Set(validTags));
+    }
+    if (template.affinity?.projectName) setProjectName(template.affinity.projectName);
+    if (template.affinity?.preferAgent) setPreferAgent(template.affinity.preferAgent);
+  }, []);
+
+  /** Prompt for a name and save the current form state as a template */
+  const handleSaveAsTemplate = useCallback(() => {
+    const trimmed = command.trim();
+    if (!trimmed) {
+      toast.error("Enter a command before saving as template");
+      return;
+    }
+    const templateName = window.prompt("Template name:");
+    if (!templateName?.trim()) return;
+
+    setSavingTemplate(true);
+    try {
+      const affinity: TaskTemplate["affinity"] = {};
+      if (tags.size > 0) affinity.tags = Array.from(tags);
+      if (projectName.trim()) affinity.projectName = projectName.trim();
+      if (preferAgent) affinity.preferAgent = preferAgent;
+
+      saveTemplate({
+        name: templateName.trim(),
+        command: trimmed,
+        affinity: Object.keys(affinity).length > 0 ? affinity : undefined,
+      });
+      toast.success("Template saved", { description: templateName.trim() });
+    } catch (err) {
+      toast.error("Failed to save template", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setSavingTemplate(false);
+    }
+  }, [command, tags, projectName, preferAgent]);
+
   const canSubmit = command.trim().length > 0 && !submitting;
 
   // Worker agents only (isWorker = true) shown in preferred agent list
@@ -158,13 +209,37 @@ export function TaskSubmitForm({ agents }: TaskSubmitFormProps) {
         borderColor: "var(--color-border-default)",
       }}
     >
-      {/* Section heading */}
-      <p
-        className="text-[10px] font-medium uppercase tracking-widest"
-        style={{ color: "var(--color-text-muted)" }}
-      >
-        Submit Task
-      </p>
+      {/* Section heading + template controls */}
+      <div className="flex items-center justify-between gap-2">
+        <p
+          className="text-[10px] font-medium uppercase tracking-widest"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          Submit Task
+        </p>
+        <div className="flex items-center gap-2">
+          <TaskTemplatesPicker onSelect={handleLoadTemplate} />
+          <button
+            type="button"
+            onClick={handleSaveAsTemplate}
+            disabled={!command.trim() || savingTemplate}
+            aria-label="Save as template"
+            title="Save as template"
+            className={cn(
+              "flex items-center gap-1.5 h-8 rounded-lg border px-2.5 text-[10px] font-mono",
+              "transition-all hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
+            )}
+            style={{
+              background: "var(--color-bg-elevated)",
+              borderColor: "var(--color-border-default)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            <BookmarkPlusIcon className="size-3" />
+            Save
+          </button>
+        </div>
+      </div>
 
       {/* Command */}
       <div className="flex flex-col gap-1.5">
@@ -346,24 +421,9 @@ export function TaskSubmitForm({ agents }: TaskSubmitFormProps) {
                 style={
                   active
                     ? {
-                        background:
-                          tag === "backend"
-                            ? "rgba(139,92,246,0.2)"
-                            : tag === "frontend"
-                            ? "rgba(34,211,238,0.2)"
-                            : "rgba(251,191,36,0.2)",
-                        borderColor:
-                          tag === "backend"
-                            ? "rgba(139,92,246,0.4)"
-                            : tag === "frontend"
-                            ? "rgba(34,211,238,0.4)"
-                            : "rgba(251,191,36,0.4)",
-                        color:
-                          tag === "backend"
-                            ? "#a78bfa"
-                            : tag === "frontend"
-                            ? "#22d3ee"
-                            : "#fbbf24",
+                        background: `var(--color-tag-${tag}-subtle)`,
+                        borderColor: `var(--color-tag-${tag}-border)`,
+                        color: `var(--color-tag-${tag})`,
                       }
                     : {
                         background: "transparent",
@@ -393,20 +453,9 @@ export function TaskSubmitForm({ agents }: TaskSubmitFormProps) {
               variant="outline"
               className="text-[9px] font-mono"
               style={{
-                background:
-                  tag === "backend"
-                    ? "rgba(139,92,246,0.15)"
-                    : tag === "frontend"
-                    ? "rgba(34,211,238,0.15)"
-                    : "rgba(251,191,36,0.15)",
-                borderColor:
-                  tag === "backend"
-                    ? "rgba(139,92,246,0.3)"
-                    : tag === "frontend"
-                    ? "rgba(34,211,238,0.3)"
-                    : "rgba(251,191,36,0.3)",
-                color:
-                  tag === "backend" ? "#a78bfa" : tag === "frontend" ? "#22d3ee" : "#fbbf24",
+                background: `var(--color-tag-${tag}-muted)`,
+                borderColor: `var(--color-tag-${tag}-muted-border)`,
+                color: `var(--color-tag-${tag})`,
               }}
             >
               {tag}

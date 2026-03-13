@@ -11,6 +11,7 @@ import { ShortcutOverlay } from "./components/ShortcutOverlay";
 import { CommandCenter } from "./components/CommandCenter";
 import { TerminalPage } from "./components/TerminalPage";
 import { GlobalNotificationProvider } from "./components/GlobalNotificationProvider";
+import { CommandPalette } from "./components/shared/CommandPalette";
 import { unlockAudio, isAudioUnlocked } from "./lib/sounds";
 import type { AgentState } from "./lib/types";
 
@@ -64,7 +65,7 @@ export function App() {
   // Cmd+Shift+K navigates to /#command (no longer toggles overlay)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "?" && !(e.target instanceof HTMLInputElement)) {
+      if (e.key === "?" && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
         setShowShortcuts(true);
       }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "K") {
@@ -124,6 +125,32 @@ export function App() {
   // Global notification overlay — mounted on every route, always active.
   const globalNotifications = <GlobalNotificationProvider agents={agents} />;
 
+  // Global command palette — mounted on every route, Cmd+K to open.
+  const handleKillAgent = useCallback((target: string) => {
+    send({ type: "kill-agent", target });
+  }, [send]);
+
+  const handleToggleWorker = useCallback((sessionName: string) => {
+    send({ type: "toggle-worker", sessionName });
+  }, [send]);
+
+  const handleNavigate = useCallback((route: string) => {
+    window.location.hash = route;
+  }, []);
+
+  const globalCommandPalette = (
+    <CommandPalette
+      agents={agents}
+      onNavigate={handleNavigate}
+      onOpenTerminal={(target) => {
+        const agent = agents.find((a) => a.target === target);
+        if (agent) onSelectAgent(agent);
+      }}
+      onKillAgent={handleKillAgent}
+      onToggleWorker={handleToggleWorker}
+    />
+  );
+
   // ── Command Center ──────────────────────────────────────────────────────────
   if (route === "command") {
     const handleOpenTerminal = (agentTarget: string) => {
@@ -137,7 +164,8 @@ export function App() {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <div className="h-full flex flex-col" style={{ background: "#020208" }}>
+        {globalCommandPalette}
+        <div className="h-full flex flex-col" style={{ background: "var(--color-bg-base)" }}>
           <CommandCenter send={send} onOpenTerminal={handleOpenTerminal} />
         </div>
         {terminalModal}
@@ -151,6 +179,7 @@ export function App() {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
+        {globalCommandPalette}
         <MissionControl
           sessions={sessions}
           agents={agents}
@@ -173,7 +202,8 @@ export function App() {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <div className="overflow-y-auto h-full" style={{ background: "#020208" }}>
+        {globalCommandPalette}
+        <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
           <TokenUsage sessions={sessions} />
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
@@ -186,7 +216,8 @@ export function App() {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <div className="flex flex-col h-full" style={{ background: "#020208" }}>
+        {globalCommandPalette}
+        <div className="flex flex-col h-full" style={{ background: "var(--color-bg-base)" }}>
           <TerminalPage sessions={sessions} agents={agents} send={send} />
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
@@ -199,12 +230,13 @@ export function App() {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
+        {globalCommandPalette}
         <div className="overflow-y-auto h-full">
           <Suspense
             fallback={
               <div
                 className="flex items-center justify-center h-full"
-                style={{ background: "#020208", color: "var(--color-text-muted)" }}
+                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
               >
                 <p className="text-[12px] font-mono">Loading dashboard…</p>
               </div>
@@ -224,12 +256,13 @@ export function App() {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
+        {globalCommandPalette}
         <div className="overflow-y-auto h-full">
           <Suspense
             fallback={
               <div
                 className="flex items-center justify-center h-full"
-                style={{ background: "#020208", color: "var(--color-text-muted)" }}
+                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
               >
                 <p className="text-[12px] font-mono">Loading task board…</p>
               </div>
@@ -247,7 +280,8 @@ export function App() {
   return (
     <AppShell route={route} agents={agents} connected={connected}>
       {globalNotifications}
-      <div className="relative min-h-full" style={{ background: "#020208" }}>
+      {globalCommandPalette}
+      <div className="relative min-h-full" style={{ background: "var(--color-bg-base)" }}>
         <UniverseBg />
         <div className="relative z-10">
           <RoomGrid sessions={sessions} agents={agents} saiyanTargets={saiyanTargets} onSelectAgent={onSelectAgent} />

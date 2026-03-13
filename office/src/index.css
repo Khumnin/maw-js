@@ -31,6 +31,37 @@
   --color-accent-warning: #fbbf24;
   --color-accent-danger: #f87171;
 
+  /* Affinity tag palette */
+  --color-tag-backend: #a78bfa;
+  --color-tag-frontend: #22d3ee;
+  --color-tag-infra: #fbbf24;
+
+  /* Subtle tint tokens (rgba values kept here so inline styles can use var()) */
+  --color-accent-primary-subtle: rgba(34, 211, 238, 0.08);
+  --color-accent-primary-border: rgba(34, 211, 238, 0.2);
+  --color-accent-primary-subtle-md: rgba(34, 211, 238, 0.12);
+  --color-accent-primary-border-md: rgba(34, 211, 238, 0.25);
+  --color-accent-primary-subtle-sm: rgba(34, 211, 238, 0.06);
+  --color-accent-primary-badge: rgba(34, 211, 238, 0.1);
+  --color-accent-danger-subtle: rgba(248, 113, 113, 0.08);
+  --color-accent-danger-border: rgba(248, 113, 113, 0.2);
+  --color-accent-danger-active: rgba(248, 113, 113, 0.2);
+  --color-accent-danger-active-border: rgba(248, 113, 113, 0.4);
+
+  /* Tag subtle tints (active chip backgrounds) */
+  --color-tag-backend-subtle: rgba(139, 92, 246, 0.2);
+  --color-tag-backend-border: rgba(139, 92, 246, 0.4);
+  --color-tag-backend-muted: rgba(139, 92, 246, 0.15);
+  --color-tag-backend-muted-border: rgba(139, 92, 246, 0.3);
+  --color-tag-frontend-subtle: rgba(34, 211, 238, 0.2);
+  --color-tag-frontend-border: rgba(34, 211, 238, 0.4);
+  --color-tag-frontend-muted: rgba(34, 211, 238, 0.15);
+  --color-tag-frontend-muted-border: rgba(34, 211, 238, 0.3);
+  --color-tag-infra-subtle: rgba(251, 191, 36, 0.2);
+  --color-tag-infra-border: rgba(251, 191, 36, 0.4);
+  --color-tag-infra-muted: rgba(251, 191, 36, 0.15);
+  --color-tag-infra-muted-border: rgba(251, 191, 36, 0.3);
+
   /* Typography */
   --font-sans: 'Inter', 'SF Pro Display', system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'Courier New', monospace;
