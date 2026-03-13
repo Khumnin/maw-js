@@ -2,15 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { ChevronRight, Folder, FolderOpen, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-interface DirEntry {
-  name: string;
-  type: "directory" | "file";
-}
-
 interface BrowseResponse {
-  entries: DirEntry[];
+  dirs: string[];
   current: string;
-  parent: string;
+  parent: string | null;
 }
 
 interface DirectoryBrowserProps {
@@ -40,8 +35,8 @@ function safeName(name: string): string | null {
  */
 export function DirectoryBrowser({ initialPath = "", onSelect, onCancel }: DirectoryBrowserProps) {
   const [currentPath, setCurrentPath] = useState(initialPath);
-  const [entries, setEntries] = useState<DirEntry[]>([]);
-  const [parentPath, setParentPath] = useState<string>("");
+  const [dirs, setDirs] = useState<string[]>([]);
+  const [parentPath, setParentPath] = useState<string | null>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,8 +52,7 @@ export function DirectoryBrowser({ initialPath = "", onSelect, onCancel }: Direc
       const data: BrowseResponse = await res.json();
       setCurrentPath(data.current);
       setParentPath(data.parent);
-      // Show only directories
-      setEntries(data.entries.filter((e) => e.type === "directory"));
+      setDirs(data.dirs ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -87,7 +81,7 @@ export function DirectoryBrowser({ initialPath = "", onSelect, onCancel }: Direc
       >
         <button
           type="button"
-          onClick={() => parentPath && browse(parentPath)}
+          onClick={() => parentPath != null && parentPath !== "" && browse(parentPath)}
           disabled={!parentPath || loading}
           aria-label="Go to parent directory"
           className={cn(
@@ -128,7 +122,7 @@ export function DirectoryBrowser({ initialPath = "", onSelect, onCancel }: Direc
           </div>
         )}
 
-        {!loading && !error && entries.length === 0 && (
+        {!loading && !error && dirs.length === 0 && (
           <div
             className="flex items-center justify-center h-16 text-[11px]"
             style={{ color: "var(--color-text-muted)" }}
@@ -138,8 +132,8 @@ export function DirectoryBrowser({ initialPath = "", onSelect, onCancel }: Direc
         )}
 
         {!loading &&
-          entries.map((entry) => {
-            const safe = safeName(entry.name);
+          dirs.map((dirName) => {
+            const safe = safeName(dirName);
             if (!safe) return null;
             return (
               <button
