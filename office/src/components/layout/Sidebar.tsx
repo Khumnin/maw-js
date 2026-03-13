@@ -1,7 +1,8 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { SidebarNav } from "./SidebarNav";
 import { SidebarFleetStatus } from "./SidebarFleetStatus";
+import { SpawnAgentDialog } from "@/components/agents/SpawnAgentDialog";
 import { cn } from "@/lib/cn";
 import type { AgentState } from "@/lib/types";
 
@@ -29,6 +30,8 @@ export const Sidebar = memo(function Sidebar({
   collapsed,
   onToggleCollapse,
 }: SidebarProps) {
+  const [spawnOpen, setSpawnOpen] = useState(false);
+
   return (
     <aside
       aria-label="Sidebar navigation"
@@ -83,7 +86,7 @@ export const Sidebar = memo(function Sidebar({
         <SidebarNav activeRoute={activeRoute} collapsed={collapsed} />
       </div>
 
-      {/* ── Spawn Agent button (stub — wired in Sprint 2) ───────────────────── */}
+      {/* ── Spawn Agent button ───────────────────────────────────────────────── */}
       <div
         className={cn(
           "px-2 py-3 border-t",
@@ -93,17 +96,17 @@ export const Sidebar = memo(function Sidebar({
       >
         <button
           type="button"
-          disabled
-          aria-label="Spawn Agent (coming soon)"
+          onClick={() => setSpawnOpen(true)}
+          aria-label="Spawn Agent"
           className={cn(
             "flex items-center gap-2 rounded-md px-3 py-2",
             "text-[12px] font-medium transition-colors duration-150",
-            "opacity-50 cursor-not-allowed",
+            "hover:bg-white/[0.08]",
             collapsed ? "w-10 h-10 justify-center px-0" : "w-full"
           )}
           style={{
             background: "var(--color-bg-elevated)",
-            color: "var(--color-text-secondary)",
+            color: "var(--color-accent-primary)",
             border: "1px solid var(--color-border-default)",
           }}
         >
@@ -111,6 +114,8 @@ export const Sidebar = memo(function Sidebar({
           {!collapsed && <span>Spawn Agent</span>}
         </button>
       </div>
+
+      <SpawnAgentDialog open={spawnOpen} onOpenChange={setSpawnOpen} />
 
       {/* ── Collapse toggle ─────────────────────────────────────────────────── */}
       <div

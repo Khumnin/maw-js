@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useSessions } from "./hooks/useSessions";
 import { AppShell } from "./components/layout/AppShell";
@@ -13,6 +13,10 @@ import { TerminalPage } from "./components/TerminalPage";
 import { GlobalNotificationProvider } from "./components/GlobalNotificationProvider";
 import { unlockAudio, isAudioUnlocked } from "./lib/sounds";
 import type { AgentState } from "./lib/types";
+
+const DashboardView = lazy(() =>
+  import("./components/dashboard/DashboardView").then((m) => ({ default: m.DashboardView }))
+);
 
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash.slice(1) || "office");
@@ -186,22 +190,26 @@ export function App() {
     );
   }
 
-  // ── Dashboard (placeholder — wired in Sprint 2) ─────────────────────────────
+  // ── Dashboard ────────────────────────────────────────────────────────────────
   if (route === "dashboard") {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <div
-          className="flex items-center justify-center h-full"
-          style={{ background: "#020208", color: "var(--color-text-muted)" }}
-        >
-          <div className="text-center">
-            <p className="text-[13px] font-mono mb-1" style={{ color: "var(--color-accent-primary)" }}>
-              DASHBOARD
-            </p>
-            <p className="text-[11px]">Coming in Sprint 2</p>
-          </div>
+        <div className="overflow-y-auto h-full">
+          <Suspense
+            fallback={
+              <div
+                className="flex items-center justify-center h-full"
+                style={{ background: "#020208", color: "var(--color-text-muted)" }}
+              >
+                <p className="text-[12px] font-mono">Loading dashboard…</p>
+              </div>
+            }
+          >
+            <DashboardView onSelectAgent={onSelectAgent} />
+          </Suspense>
         </div>
+        {terminalModal}
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
       </AppShell>
     );
