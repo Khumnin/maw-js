@@ -71,6 +71,24 @@ export function TerminalModal({ agent, send, onClose, onNavigate, onSelectSiblin
     return () => clearTimeout(t);
   }, [agent.target]);
 
+  // Capture Tab/Shift+Tab at the native DOM level (before browser focus management).
+  // React synthetic events fire too late — the browser steals Tab for focus navigation.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const captureTab = (e: KeyboardEvent) => {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        send({ type: "send", target: agent.target, text: e.shiftKey ? "\x1b[Z" : "\t" });
+      }
+    };
+    // Use capture phase to intercept before any other handler
+    el.addEventListener("keydown", captureTab, true);
+    return () => el.removeEventListener("keydown", captureTab, true);
+  }, [agent.target, send]);
+
   // Refocus input when clicking anywhere in the modal,
   // but skip when the user is starting a drag-selection inside the terminal output.
   useEffect(() => {
@@ -140,13 +158,9 @@ export function TerminalModal({ agent, send, onClose, onNavigate, onSelectSiblin
   }, [flushPending]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Shift+Tab → send ECMA-48 reverse-tab escape sequence to the terminal process
-    if (e.key === "Tab" && e.shiftKey) {
-      e.preventDefault();
-      e.stopPropagation();
-      send({ type: "send", target: agent.target, text: "\x1b[Z" });
-      return;
-    }
+    // Tab/Shift+Tab are handled by the native DOM capture listener above
+    // (React synthetic events fire too late for Tab interception)
+    if (e.key === "Tab") return;
     // Ctrl+Escape closes the modal; plain Escape sends \x1b to the tmux agent
     if (e.key === "Escape") {
       e.preventDefault();
