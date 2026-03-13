@@ -18,6 +18,10 @@ const DashboardView = lazy(() =>
   import("./components/dashboard/DashboardView").then((m) => ({ default: m.DashboardView }))
 );
 
+const TaskBoardView = lazy(() =>
+  import("./components/tasks/TaskBoardView").then((m) => ({ default: m.TaskBoardView }))
+);
+
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash.slice(1) || "office");
   useEffect(() => {
@@ -215,21 +219,24 @@ export function App() {
     );
   }
 
-  // ── Tasks (placeholder — wired in Sprint 3) ─────────────────────────────────
+  // ── Task Board ───────────────────────────────────────────────────────────────
   if (route === "tasks") {
     return (
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <div
-          className="flex items-center justify-center h-full"
-          style={{ background: "#020208", color: "var(--color-text-muted)" }}
-        >
-          <div className="text-center">
-            <p className="text-[13px] font-mono mb-1" style={{ color: "var(--color-accent-primary)" }}>
-              TASKS
-            </p>
-            <p className="text-[11px]">Coming in Sprint 3</p>
-          </div>
+        <div className="overflow-y-auto h-full">
+          <Suspense
+            fallback={
+              <div
+                className="flex items-center justify-center h-full"
+                style={{ background: "#020208", color: "var(--color-text-muted)" }}
+              >
+                <p className="text-[12px] font-mono">Loading task board…</p>
+              </div>
+            }
+          >
+            <TaskBoardView />
+          </Suspense>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
       </AppShell>

@@ -3,7 +3,8 @@ import { useAgents } from "@/hooks/useAgents";
 import { StatusSummaryCards } from "./StatusSummaryCards";
 import { AgentStatusGrid } from "./AgentStatusGrid";
 import { ActivityTimeline } from "./ActivityTimeline";
-import type { AgentState } from "@/lib/types";
+import { AgentDetailDrawer } from "@/components/agents/AgentDetailDrawer";
+import type { AgentState, TrackedAgent } from "@/lib/types";
 
 /** DailyCostChart is lazy-loaded because Recharts is ~45KB */
 const DailyCostChart = lazy(() =>
@@ -24,6 +25,10 @@ interface DashboardViewProps {
  */
 export function DashboardView({ onSelectAgent }: DashboardViewProps) {
   const agents = useAgents();
+
+  // Agent detail drawer state
+  const [detailAgent, setDetailAgent] = useState<TrackedAgent | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   // Accumulate tasks-today counter from maw-ws-message events
   const [tasksToday, setTasksToday] = useState(0);
@@ -91,7 +96,14 @@ export function DashboardView({ onSelectAgent }: DashboardViewProps) {
         >
           Active Agents
         </p>
-        <AgentStatusGrid agents={sortedAgents} onSelectAgent={onSelectAgent} />
+        <AgentStatusGrid
+          agents={sortedAgents}
+          onSelectAgent={onSelectAgent}
+          onShowDetails={(agent) => {
+            setDetailAgent(agent);
+            setDetailOpen(true);
+          }}
+        />
       </div>
 
       {/* Bottom two-column layout */}
@@ -133,6 +145,13 @@ export function DashboardView({ onSelectAgent }: DashboardViewProps) {
           <ActivityTimeline />
         </div>
       </div>
+
+      {/* Agent detail drawer */}
+      <AgentDetailDrawer
+        agent={detailAgent}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+      />
     </div>
   );
 }
