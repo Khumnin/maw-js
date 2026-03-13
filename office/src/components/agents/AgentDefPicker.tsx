@@ -64,7 +64,14 @@ export function AgentDefPicker({ value, onChange }: AgentDefPickerProps) {
           />
         </span>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent
+        className="z-[200]"
+        style={{
+          background: "var(--color-bg-elevated)",
+          borderColor: "var(--color-border-strong)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)",
+        }}
+      >
         {definitions.map((def) => (
           <SelectItem key={def.file} value={def.name}>
             <span className="flex flex-col gap-0.5 min-w-0 max-w-[360px]">

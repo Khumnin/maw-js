@@ -99,26 +99,26 @@
   --radius-lg: 16px;
   --radius-xl: 20px;
 
-  /* shadcn/ui required variables (dark mode) */
-  --background: 240 15% 3%;
-  --foreground: 240 10% 92%;
-  --card: 240 15% 5%;
-  --card-foreground: 240 10% 92%;
-  --popover: 240 15% 5%;
-  --popover-foreground: 240 10% 92%;
-  --primary: 187 80% 54%;
-  --primary-foreground: 240 15% 3%;
-  --secondary: 240 10% 12%;
-  --secondary-foreground: 240 10% 92%;
-  --muted: 240 10% 12%;
-  --muted-foreground: 240 5% 50%;
-  --accent: 240 10% 16%;
-  --accent-foreground: 240 10% 92%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 240 10% 92%;
-  --border: 240 5% 16%;
-  --input: 240 5% 16%;
-  --ring: 187 80% 54%;
+  /* shadcn/ui bridge variables (Tailwind v4 uses --color-* prefix) */
+  --color-background: hsl(240 15% 3%);
+  --color-foreground: hsl(240 10% 92%);
+  --color-card: hsl(240 15% 5%);
+  --color-card-foreground: hsl(240 10% 92%);
+  --color-popover: hsl(240 15% 5%);
+  --color-popover-foreground: hsl(240 10% 92%);
+  --color-primary: hsl(187 80% 54%);
+  --color-primary-foreground: hsl(240 15% 3%);
+  --color-secondary: hsl(240 10% 12%);
+  --color-secondary-foreground: hsl(240 10% 92%);
+  --color-muted: hsl(240 10% 12%);
+  --color-muted-foreground: hsl(240 5% 50%);
+  --color-accent: hsl(240 10% 16%);
+  --color-accent-foreground: hsl(240 10% 92%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(240 10% 92%);
+  --color-border: hsl(240 5% 16%);
+  --color-input: hsl(240 5% 16%);
+  --color-ring: hsl(187 80% 54%);
   --radius: 0.625rem;
 }
 
