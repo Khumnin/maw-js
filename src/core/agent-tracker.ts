@@ -352,10 +352,14 @@ export class AgentTracker {
             preview,
             headline,
             context,
+            projectLabel: existing?.projectLabel,
           });
         })
       );
     }
+
+    // Apply any pending spawn-time project labels now that agents are in the map
+    this.applyPendingProjectLabels();
   }
 
   getIdleWorkers(): TrackedAgent[] {
@@ -389,6 +393,46 @@ export class AgentTracker {
     for (const [target, agent] of this.agents) {
       agent.isWorker = isWorker(agent.sessionName);
       this.agents.set(target, agent);
+    }
+  }
+
+  // Set the project label for an agent (manual assignment)
+  setProjectLabel(target: string, project: string | null): boolean {
+    const agent = this.agents.get(target);
+    if (!agent) return false;
+    agent.projectLabel = project;
+    this.agents.set(target, agent);
+    return true;
+  }
+
+  // Set initial project label at spawn time (before first poll)
+  setSpawnProjectLabel(sessionName: string, project: string): void {
+    // Called right after spawn — agent may not be in the map yet (poll hasn't run),
+    // so we store it in a pending map and apply it on the next poll.
+    this.pendingProjectLabels.set(sessionName, project);
+  }
+
+  private pendingProjectLabels: Map<string, string> = new Map();
+
+  // Apply any pending spawn-time project labels after a poll populates the agents map
+  private applyPendingProjectLabels(): void {
+    for (const [sessionName, projectLabel] of this.pendingProjectLabels) {
+      let applied = false;
+      for (const [target, agent] of this.agents) {
+        if (agent.sessionName === sessionName) {
+          if (agent.projectLabel == null) {
+            agent.projectLabel = projectLabel;
+            this.agents.set(target, agent);
+            applied = true;
+          } else {
+            // Agent already has a label — pending entry no longer needed
+            applied = true;
+          }
+        }
+      }
+      if (applied) {
+        this.pendingProjectLabels.delete(sessionName);
+      }
     }
   }
 }

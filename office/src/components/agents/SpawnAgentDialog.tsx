@@ -23,6 +23,7 @@ interface SpawnAgentDialogProps {
 interface SpawnPayload {
   name: string;
   workDir?: string;
+  project?: string;
   agentName?: string;
   initialPrompt?: string;
 }
@@ -30,6 +31,7 @@ interface SpawnPayload {
 interface FieldErrors {
   sessionName?: string;
   workDir?: string;
+  project?: string;
 }
 
 /**
@@ -47,6 +49,7 @@ interface FieldErrors {
 export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) {
   const [sessionName, setSessionName] = useState("");
   const [workDir, setWorkDir] = useState("");
+  const [project, setProject] = useState("");
   const [agentName, setAgentName] = useState("");
   const [initialPrompt, setInitialPrompt] = useState("");
   const [showBrowser, setShowBrowser] = useState(false);
@@ -70,6 +73,9 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
         errors.workDir = "Working directory contains invalid characters";
       }
     }
+    if (project.length > 64) {
+      errors.project = "Project label must not exceed 64 characters";
+    }
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -81,6 +87,7 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
     try {
       const payload: SpawnPayload = { name: sessionName };
       if (workDir.trim()) payload.workDir = workDir.trim();
+      if (project.trim()) payload.project = project.trim();
       if (agentName) payload.agentName = agentName;
       if (initialPrompt.trim()) payload.initialPrompt = initialPrompt.trim();
 
@@ -108,6 +115,7 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
     if (submitting) return;
     setSessionName("");
     setWorkDir("");
+    setProject("");
     setAgentName("");
     setInitialPrompt("");
     setShowBrowser(false);
@@ -239,6 +247,47 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
                 }}
                 onCancel={() => setShowBrowser(false)}
               />
+            )}
+          </div>
+
+          {/* Project */}
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="spawn-project"
+              className="text-[12px] font-medium"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Project <span className="text-[10px] opacity-50">(optional)</span>
+            </label>
+            <input
+              id="spawn-project"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={project}
+              onChange={(e) => {
+                setProject(e.target.value);
+                if (fieldErrors.project) setFieldErrors((p) => ({ ...p, project: undefined }));
+              }}
+              placeholder="e.g. tigersoft-auth"
+              maxLength={64}
+              className={cn(
+                "w-full rounded-md border px-3 py-2 text-[12px] font-mono outline-none",
+                "transition-colors focus:ring-1",
+                fieldErrors.project
+                  ? "border-red-500/60 focus:ring-red-500/40"
+                  : "focus:ring-[var(--color-accent-primary)] focus:border-[var(--color-accent-primary)]"
+              )}
+              style={{
+                background: "var(--color-bg-elevated)",
+                borderColor: fieldErrors.project ? undefined : "var(--color-border-default)",
+                color: "var(--color-text-primary)",
+              }}
+            />
+            {fieldErrors.project && (
+              <p className="text-[11px]" style={{ color: "var(--color-accent-danger)" }}>
+                {fieldErrors.project}
+              </p>
             )}
           </div>
 

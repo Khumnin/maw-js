@@ -19,7 +19,7 @@ import { goalRoutes } from "./db/goals";
 import { createRpcRoutes } from "./api/rpc";
 import { createDiscoveryRoutes } from "./api/discovery";
 import type { AgentDefinition } from "./types/api.js";
-import { SubmitTaskSchema, CancelTaskSchema, SubmitChainSchema, WorkerActionSchema, SpawnAgentSchema } from "./types/api.js";
+import { SubmitTaskSchema, CancelTaskSchema, SubmitChainSchema, WorkerActionSchema, SpawnAgentSchema, SetProjectSchema } from "./types/api.js";
 import { MAW_AGENTS_DIR, MAW_UPLOAD_DIR } from "./paths";
 
 // ── Path-validator allowed roots ───────────────────────────────────────────────
@@ -201,7 +201,11 @@ app.post(
       return c.json({ error: issue?.message ?? "invalid request" }, 400);
     }
     const { name, workDir, initialPrompt, agentName } = parsed.data;
+    const project = parsed.data.project?.trim() || null;
     await spawnAgent(name, workDir, initialPrompt, undefined, agentName);
+    if (project) {
+      tracker.setSpawnProjectLabel(name, project);
+    }
     broadcastToAll({ type: "agent-spawned", sessionName: name });
     return c.json({ ok: true, sessionName: name });
   } catch (e: unknown) {
@@ -286,6 +290,27 @@ app.patch("/api/agents/:target/name", async (c) => {
     await renameWindow(target, name);
     broadcastToAll({ type: "agent-renamed", target, name });
     return c.json({ ok: true, name });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+app.patch("/api/agents/:target/project", async (c) => {
+  try {
+    const target = decodeURIComponent(c.req.param("target"));
+    if (!target) return c.json({ error: "target required" }, 400);
+    const raw = await c.req.json();
+    const parsed = SetProjectSchema.safeParse(raw);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return c.json({ error: issue?.message ?? "invalid request" }, 400);
+    }
+    const project = parsed.data.project.trim() || null;
+    const found = tracker.setProjectLabel(target, project);
+    if (!found) return c.json({ error: "agent not found" }, 404);
+    broadcastToAll({ type: "agents-updated", agents: tracker.getAll() });
+    return c.json({ ok: true });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return c.json({ error: msg }, 500);
@@ -494,7 +519,7 @@ app.get("/api/token-usage/by-agent", async (c) => {
     if (!VALID_RANGES.includes(rawRange)) {
       return c.json({ error: "Invalid range. Must be one of: 7d, 30d, mtd, all" }, 400);
     }
-    const data = await getTokenUsageByAgent(rawRange as TimeRange);
+    const data = await getTokenUsageByAgent(rawRange as TimeRange, tracker);
     return c.json(data);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
