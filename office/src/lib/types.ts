@@ -63,6 +63,8 @@ export interface AgentState {
   active: boolean;
   preview: string;
   status: PaneStatus;
+  /** Worker flag sourced from the `agents-updated` WebSocket push */
+  isWorker: boolean;
 }
 
 export interface AgentEvent {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import type { Session, AgentState, PaneStatus, AgentEvent } from "../lib/types";
+import type { Session, AgentState, PaneStatus, AgentEvent, TrackedAgent } from "../lib/types";
 import { stripAnsi } from "../lib/ansi";
 import { agentSortKey } from "../lib/constants";
 
@@ -42,6 +42,8 @@ const BARE_SHELL_RE = /^(bash|zsh|sh)\s*$/m;
 export function useSessions() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [captureData, setCaptureData] = useState<Record<string, { preview: string; status: PaneStatus }>>({});
+  /** isWorker flags keyed by tmux target ("session:windowIndex") — sourced from agents-updated WS */
+  const [workerFlags, setWorkerFlags] = useState<Record<string, boolean>>({});
   const pollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
@@ -68,6 +70,14 @@ export function useSessions() {
   const handleMessage = useCallback((data: any) => {
     if (data.type === "sessions") {
       setSessions(data.sessions);
+    } else if (data.type === "agents-updated") {
+      // Build a target → isWorker lookup from the TrackedAgent list
+      const flags: Record<string, boolean> = {};
+      const trackedAgents: TrackedAgent[] = data.agents ?? [];
+      for (const a of trackedAgents) {
+        flags[a.target] = a.isWorker;
+      }
+      setWorkerFlags(flags);
     }
   }, []);
 
@@ -225,12 +235,13 @@ export function useSessions() {
           active: w.active,
           preview: cd?.preview || "",
           status: cd?.status || "idle",
+          isWorker: workerFlags[key] ?? false,
         };
       })
     );
     list.sort((a, b) => agentSortKey(a.name) - agentSortKey(b.name));
     return list;
-  }, [sessions, captureData]);
+  }, [sessions, captureData, workerFlags]);
 
   return { sessions, agents, saiyanTargets, blinkTargets, eventLog, addEvent, handleMessage };
 }

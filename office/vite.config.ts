@@ -12,6 +12,7 @@ export default defineConfig({
       // Allow frontend to import shared types from the backend src/types directory.
       // Usage in frontend: import type { Task } from "@shared/task"
       "@shared": resolve(__dirname, "../src/types"),
+      "@": resolve(__dirname, "./src"),
     },
   },
   build: {

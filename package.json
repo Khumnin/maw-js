@@ -19,9 +19,15 @@
   "description": "maw.js — Multi-Agent Workflow in Bun/TS. Remote tmux orchestra control. CLI + Web UI.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "hono": "^4.12.5",
+    "lucide-react": "^0.577.0",
+    "radix-ui": "^1.4.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.5.0",
     "three": "^0.183.2",
     "zod": "^4.3.6"
   },

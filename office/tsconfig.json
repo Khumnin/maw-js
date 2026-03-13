@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "paths": {
       "@shared": ["../src/types/index.ts"],
-      "@shared/*": ["../src/types/*"]
+      "@shared/*": ["../src/types/*"],
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src", "../src/types"]

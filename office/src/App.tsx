@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useSessions } from "./hooks/useSessions";
+import { AppShell } from "./components/layout/AppShell";
 import { UniverseBg } from "./components/UniverseBg";
-import { StatusBar } from "./components/StatusBar";
 import { RoomGrid } from "./components/RoomGrid";
 import { TerminalModal } from "./components/TerminalModal";
 import { MissionControl } from "./components/MissionControl";
@@ -69,14 +69,14 @@ export function App() {
   }, []);
 
   // Forward all WS messages to CommandCenter via custom event
-  const handleMessage = useCallback((data: any) => {
+  const handleMessage = useCallback((data: unknown) => {
     window.dispatchEvent(new CustomEvent("maw-ws-message", { detail: data }));
     return data;
   }, []);
 
   const { sessions, agents, saiyanTargets, blinkTargets, eventLog, addEvent, handleMessage: handleSessionMessage } = useSessions();
 
-  const combinedHandleMessage = useCallback((data: any) => {
+  const combinedHandleMessage = useCallback((data: unknown) => {
     handleMessage(data);
     handleSessionMessage(data);
   }, [handleMessage, handleSessionMessage]);
@@ -116,8 +116,7 @@ export function App() {
   // Global notification overlay — mounted on every route, always active.
   const globalNotifications = <GlobalNotificationProvider agents={agents} />;
 
-  // ── Command Center: full-page route /#command ──────────────────────────────
-
+  // ── Command Center ──────────────────────────────────────────────────────────
   if (route === "command") {
     const handleOpenTerminal = (agentTarget: string) => {
       const agent = agents.find((a) => a.target === agentTarget);
@@ -128,30 +127,22 @@ export function App() {
     };
 
     return (
-      <div className="relative min-h-screen" style={{ background: "#020208" }}>
+      <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <div className="relative z-10">
-          <StatusBar
-            connected={connected}
-            agentCount={agents.length}
-            sessionCount={sessions.length}
-            activeView="command"
-          />
+        <div className="h-full flex flex-col" style={{ background: "#020208" }}>
           <CommandCenter send={send} onOpenTerminal={handleOpenTerminal} />
         </div>
         {terminalModal}
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
-      </div>
+      </AppShell>
     );
   }
 
+  // ── Mission Control ─────────────────────────────────────────────────────────
   if (route === "mission") {
     return (
-      <div className="relative min-h-screen" style={{ background: "#020208" }}>
+      <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <div className="relative z-10">
-          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="mission" />
-        </div>
         <MissionControl
           sessions={sessions}
           agents={agents}
@@ -165,46 +156,90 @@ export function App() {
         />
         {terminalModal}
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
-      </div>
+      </AppShell>
     );
   }
 
+  // ── Token Usage ─────────────────────────────────────────────────────────────
   if (route === "tokens") {
     return (
-      <div className="relative min-h-screen" style={{ background: "#020208" }}>
+      <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <div className="relative z-10">
-          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="tokens" />
-          <div className="relative z-10 overflow-y-auto" style={{ height: "calc(100dvh - 80px)" }}>
-            <TokenUsage sessions={sessions} />
+        <div className="overflow-y-auto h-full" style={{ background: "#020208" }}>
+          <TokenUsage sessions={sessions} />
+        </div>
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+      </AppShell>
+    );
+  }
+
+  // ── Terminal ────────────────────────────────────────────────────────────────
+  if (route === "terminal") {
+    return (
+      <AppShell route={route} agents={agents} connected={connected}>
+        {globalNotifications}
+        <div className="flex flex-col h-full" style={{ background: "#020208" }}>
+          <TerminalPage sessions={sessions} agents={agents} send={send} />
+        </div>
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+      </AppShell>
+    );
+  }
+
+  // ── Dashboard (placeholder — wired in Sprint 2) ─────────────────────────────
+  if (route === "dashboard") {
+    return (
+      <AppShell route={route} agents={agents} connected={connected}>
+        {globalNotifications}
+        <div
+          className="flex items-center justify-center h-full"
+          style={{ background: "#020208", color: "var(--color-text-muted)" }}
+        >
+          <div className="text-center">
+            <p className="text-[13px] font-mono mb-1" style={{ color: "var(--color-accent-primary)" }}>
+              DASHBOARD
+            </p>
+            <p className="text-[11px]">Coming in Sprint 2</p>
           </div>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
-      </div>
+      </AppShell>
     );
   }
 
-  if (route === "terminal") {
+  // ── Tasks (placeholder — wired in Sprint 3) ─────────────────────────────────
+  if (route === "tasks") {
     return (
-      <div className="flex flex-col h-dvh" style={{ background: "#020208" }}>
+      <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
-        <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="terminal" flush />
-        <TerminalPage sessions={sessions} agents={agents} send={send} />
+        <div
+          className="flex items-center justify-center h-full"
+          style={{ background: "#020208", color: "var(--color-text-muted)" }}
+        >
+          <div className="text-center">
+            <p className="text-[13px] font-mono mb-1" style={{ color: "var(--color-accent-primary)" }}>
+              TASKS
+            </p>
+            <p className="text-[11px]">Coming in Sprint 3</p>
+          </div>
+        </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
-      </div>
+      </AppShell>
     );
   }
 
+  // ── Office (default) ────────────────────────────────────────────────────────
   return (
-    <div className="relative min-h-screen">
+    <AppShell route={route} agents={agents} connected={connected}>
       {globalNotifications}
-      <UniverseBg />
-      <div className="relative z-10">
-        <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="office" />
-        <RoomGrid sessions={sessions} agents={agents} saiyanTargets={saiyanTargets} onSelectAgent={onSelectAgent} />
+      <div className="relative min-h-full" style={{ background: "#020208" }}>
+        <UniverseBg />
+        <div className="relative z-10">
+          <RoomGrid sessions={sessions} agents={agents} saiyanTargets={saiyanTargets} onSelectAgent={onSelectAgent} />
+        </div>
       </div>
       {terminalModal}
       {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
-    </div>
+    </AppShell>
   );
 }
