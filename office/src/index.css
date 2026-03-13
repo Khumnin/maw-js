@@ -14,6 +14,19 @@ body {
 /* Shared */
 @keyframes agent-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 @keyframes blink { 50% { opacity: 0; } }
+@keyframes status-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Permission state — pulsing orange to demand attention */
+@keyframes permission-pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.5); }
+}
+
+/* Content-update blink — brief scale pop on any content change, settles in 0.5s */
+@keyframes status-update-blink {
+  0% { transform: scale(1.8); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
 
 /* SVG chibi avatar animations */
 @keyframes saiyan-aura { 0% { r: 28; opacity: 0.5; } 50% { r: 40; opacity: 0.2; } 100% { r: 28; opacity: 0.5; } }
@@ -48,3 +61,102 @@ body {
 
 /* Terminal modal slide up */
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+/* ── Responsive: CommandCenter two-column layout ─────────────────────────── */
+
+/* Mobile default: full-width stacked columns */
+.cmd-col-left {
+  width: 100%;
+  border-right: none;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 16px;
+  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.cmd-col-right {
+  width: 100%;
+  padding: 16px;
+  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* Desktop: 60/40 side-by-side */
+@media (min-width: 768px) {
+  .cmd-col-left {
+    width: 60%;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    border-bottom: none;
+    padding: 20px 24px;
+    gap: 20px;
+  }
+
+  .cmd-col-right {
+    width: 40%;
+    padding: 20px 24px;
+    gap: 20px;
+  }
+}
+
+/* ── SpawnDialog / ChainBuilder: full-screen on mobile ───────────────────── */
+.dialog-panel {
+  width: 560px;
+  max-height: 90vh;
+  border-radius: 16px;
+}
+
+@media (max-width: 640px) {
+  .dialog-panel {
+    width: 100vw;
+    max-height: 95dvh;
+    border-radius: 20px 20px 0 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+}
+
+/* ── TokenUsage: overview cards wrap nicely on mobile ────────────────────── */
+.token-overview-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.token-overview-cards > * {
+  flex: 1 1 calc(50% - 6px);
+  min-width: 140px;
+}
+
+@media (min-width: 768px) {
+  .token-overview-cards > * {
+    flex: 1 1 0;
+    min-width: 160px;
+  }
+}
+
+/* ── Touch target helpers ────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Ensure nav links have adequate touch targets */
+  .status-nav a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* ── Terminal modal: bottom sheet slide-up on mobile ─────────────────────── */
+@media (max-width: 639px) {
+  /* The modal wrapper aligns to bottom (items-end), panel animates up */
+  .terminal-modal-panel {
+    animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
+/* ── Prevent layout shift from scrollbar on desktop ─────────────────────── */
+html { scrollbar-gutter: stable; }

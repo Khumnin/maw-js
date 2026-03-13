@@ -3,9 +3,11 @@ import { agentColor } from "../lib/constants";
 import type { PaneStatus } from "../lib/types";
 
 const STATUS_FX: Record<PaneStatus, { color: string; aura: number; sparkle: boolean; typing: boolean }> = {
-  ready: { color: "#4caf50", aura: 1, sparkle: false, typing: false },
-  busy:  { color: "#fdd835", aura: 2, sparkle: true, typing: true },
-  idle:  { color: "#666",    aura: 0, sparkle: false, typing: false },
+  working:    { color: "#22c55e", aura: 2, sparkle: true,  typing: true  },
+  waiting:    { color: "#eab308", aura: 1, sparkle: false, typing: false },
+  permission: { color: "#f97316", aura: 1, sparkle: false, typing: false },
+  error:      { color: "#ef4444", aura: 0, sparkle: false, typing: false },
+  idle:       { color: "#6b7280", aura: 0, sparkle: false, typing: false },
 };
 
 interface AgentAvatarProps {
@@ -15,17 +17,18 @@ interface AgentAvatarProps {
   preview: string;
   accent: string;
   saiyan?: boolean;
+  blink?: boolean;
   onClick: () => void;
 }
 
-export const AgentAvatar = memo(function AgentAvatar({ name, target, status, preview, accent, saiyan, onClick }: AgentAvatarProps) {
+export const AgentAvatar = memo(function AgentAvatar({ name, target, status, preview, accent, saiyan, blink, onClick }: AgentAvatarProps) {
   const color = agentColor(name);
   const fx = STATUS_FX[status];
   const filterId = `glow-${target.replace(/[^a-z0-9]/gi, "-")}`;
   const auraId = `aura-${target.replace(/[^a-z0-9]/gi, "-")}`;
 
   const displayName = name.replace(/-oracle$/, "").replace(/-/g, " ");
-  const shortName = displayName.length > 10 ? displayName.slice(0, 10) + ".." : displayName;
+  const _shortName = displayName.length > 10 ? displayName.slice(0, 10) + ".." : displayName;
 
   // Deterministic features from name hash
   let h = 0;
@@ -127,8 +130,8 @@ export const AgentAvatar = memo(function AgentAvatar({ name, target, status, pre
 
       {/* Ground shadow */}
       <ellipse cx={0} cy={24} rx={16} ry={4}
-        fill={status === "idle" ? "#333" : fx.color}
-        opacity={status === "idle" ? 0.3 : 0.2} />
+        fill={status === "idle" || status === "error" ? "#333" : fx.color}
+        opacity={status === "idle" || status === "error" ? 0.3 : 0.2} />
 
       {/* === CHIBI BODY (small hoodie) === */}
       <rect x={-12} y={6} width={24} height={18} rx={8}
@@ -205,7 +208,7 @@ export const AgentAvatar = memo(function AgentAvatar({ name, target, status, pre
       <ellipse cx={12} cy={-7} rx={3} ry={2} fill="#ff9999" opacity={0.25} />
 
       {/* Mouth */}
-      {status === "busy" ? (
+      {status === "working" ? (
         <ellipse cx={0} cy={-4} rx={2.5} ry={2} fill="#333" />
       ) : (
         <path d="M -3 -5 Q 0 -2 3 -5" fill="none" stroke="#333" strokeWidth={1.2} strokeLinecap="round" />
@@ -249,11 +252,19 @@ export const AgentAvatar = memo(function AgentAvatar({ name, target, status, pre
         <circle cx={16} cy={-28} r={5} fill={fx.color} opacity={0.4} filter={`url(#${filterId})`} />
       )}
       <circle cx={16} cy={-28} r={3.5} fill={fx.color} stroke="#1a1a1a" strokeWidth={1.5}
-        style={fx.aura >= 2 ? { animation: "agent-pulse 0.6s ease-in-out infinite" } : {}} />
+        style={
+          status === "permission"
+            ? { animation: "permission-pulse 1s ease-in-out infinite" }
+            : blink
+            ? { animation: "status-update-blink 0.5s ease-out forwards" }
+            : status === "working"
+            ? { animation: "status-blink 1s ease-in-out infinite" }
+            : {}
+        } />
 
       {/* Name label removed — rendered as HTML in AgentCard */}
 
-      {/* Floating code (busy) */}
+      {/* Floating code (working) */}
       {fx.typing && preview && (
         <foreignObject x={-65} y={-70} width={130} height={20} style={{ pointerEvents: "none" }}>
           <div style={{

@@ -6,22 +6,38 @@ interface BottomStatsProps {
 }
 
 export const BottomStats = memo(function BottomStats({ agents }: BottomStatsProps) {
-  const busyCount = agents.filter((a) => a.status === "busy").length;
-  const readyCount = agents.filter((a) => a.status === "ready").length;
-  const idleCount = agents.filter((a) => a.status === "idle").length;
+  const workingCount    = agents.filter((a) => a.status === "working").length;
+  const waitingCount    = agents.filter((a) => a.status === "waiting").length;
+  const permissionCount = agents.filter((a) => a.status === "permission").length;
+  const errorCount      = agents.filter((a) => a.status === "error").length;
+  const idleCount       = agents.filter((a) => a.status === "idle").length;
 
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-6 px-6 py-2 rounded-xl bg-black/40 backdrop-blur border border-white/[0.04]">
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-5 px-6 py-2 rounded-xl bg-black/40 backdrop-blur border border-white/[0.04]">
       <span className="flex items-center gap-1.5">
-        <span className="w-2 h-2 rounded-full bg-yellow-400" />
-        <strong className="text-yellow-400 text-xs">{busyCount}</strong>
-        <span className="text-[10px] text-white/50">busy</span>
+        <span className="w-2 h-2 rounded-full" style={{ background: "#22c55e" }} />
+        <strong className="text-xs" style={{ color: "#22c55e" }}>{workingCount}</strong>
+        <span className="text-[10px] text-white/50">working</span>
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-        <strong className="text-emerald-400 text-xs">{readyCount}</strong>
-        <span className="text-[10px] text-white/50">ready</span>
+        <span className="w-2 h-2 rounded-full" style={{ background: "#eab308" }} />
+        <strong className="text-xs" style={{ color: "#eab308" }}>{waitingCount}</strong>
+        <span className="text-[10px] text-white/50">waiting</span>
       </span>
+      {permissionCount > 0 && (
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full" style={{ background: "#f97316", animation: "permission-pulse 1s ease-in-out infinite" }} />
+          <strong className="text-xs" style={{ color: "#f97316" }}>{permissionCount}</strong>
+          <span className="text-[10px] text-white/50">permission</span>
+        </span>
+      )}
+      {errorCount > 0 && (
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full" style={{ background: "#ef4444" }} />
+          <strong className="text-xs" style={{ color: "#ef4444" }}>{errorCount}</strong>
+          <span className="text-[10px] text-white/50">error</span>
+        </span>
+      )}
       <span className="flex items-center gap-1.5">
         <span className="w-2 h-2 rounded-full bg-white/30" />
         <strong className="text-white/50 text-xs">{idleCount}</strong>
@@ -31,8 +47,8 @@ export const BottomStats = memo(function BottomStats({ agents }: BottomStatsProp
         <div
           className="h-full rounded-full transition-all duration-700"
           style={{
-            width: `${Math.min(100, (busyCount / Math.max(1, agents.length)) * 100)}%`,
-            background: busyCount > 5 ? "#ef5350" : busyCount > 2 ? "#fdd835" : "#4caf50",
+            width: `${Math.min(100, (workingCount / Math.max(1, agents.length)) * 100)}%`,
+            background: permissionCount > 0 ? "#f97316" : workingCount > 5 ? "#ef4444" : workingCount > 2 ? "#eab308" : "#22c55e",
           }}
         />
       </div>

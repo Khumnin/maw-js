@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "maw-agent-rpc": {
+      "command": "bun",
+      "args": ["run", "src/mcp-server.ts"],
+      "cwd": "/Users/kanatekhumnin/Project/maw-js",
+      "env": {
+        "MAW_URL": "http://localhost:3456"
+      }
+    }
+  }
+}

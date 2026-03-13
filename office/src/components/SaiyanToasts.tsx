@@ -25,7 +25,7 @@ export const SaiyanToasts = memo(function SaiyanToasts({
 }: SaiyanToastsProps) {
   const [saiyanCards, setSaiyanCards] = useState<Map<string, SaiyanCard>>(new Map());
   const saiyanQueue = useRef<string[]>([]);
-  const saiyanStaggerTimer = useRef<ReturnType<typeof setTimeout>>();
+  const saiyanStaggerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const saiyanDismissTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const saiyanOrderCounter = useRef(0);
   const prevSaiyanTargets = useRef<Set<string>>(new Set());

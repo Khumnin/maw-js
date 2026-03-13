@@ -54,16 +54,62 @@ export function findWindow(sessions: Session[], query: string): string | null {
 }
 
 export async function capture(target: string, lines = 80, host?: string): Promise<string> {
-  // -e preserves ANSI escape sequences (colors), -S captures scroll-back
-  if (lines > 50) {
-    // Grab full visible pane + some scrollback
-    return ssh(`tmux capture-pane -t '${target}' -e -p -S -${lines} 2>/dev/null`, host);
-  }
-  return ssh(`tmux capture-pane -t '${target}' -e -p 2>/dev/null | tail -${lines}`, host);
+  // -e preserves ANSI escape sequences (colors)
+  // -S -N captures N lines of scrollback so the permission prompt is never cut off.
+  // Previously the <= 50 path used `| tail -N` on the visible pane only, which
+  // returned empty/whitespace when the prompt was in scrollback (above the cursor).
+  return ssh(`tmux capture-pane -t '${target}' -e -p -S -${lines} 2>/dev/null`, host);
 }
 
 export async function selectWindow(target: string, host?: string): Promise<void> {
   await ssh(`tmux select-window -t '${target}' 2>/dev/null`, host);
+}
+
+export async function spawnAgent(
+  name: string,
+  workDir?: string,
+  initialPrompt?: string,
+  host?: string,
+  agentName?: string,
+): Promise<void> {
+  // Create new detached tmux session
+  // Replace leading ~ with $HOME so the shell expands it — tmux -c does not
+  // expand tilde inside single quotes on all platforms.
+  let dir = workDir || "$HOME";
+  if (dir.startsWith("~")) {
+    dir = "$HOME" + dir.slice(1);
+  }
+  await ssh(`tmux new-session -d -s '${name}' -c '${dir}' 2>/dev/null || true`, host);
+
+  // Give the shell ~400ms to initialize before sending anything
+  await new Promise<void>((r) => setTimeout(r, 400));
+
+  // Start Claude Code — with or without --agent flag
+  const claudeCmd = agentName ? `claude --agent ${agentName}` : "claude";
+  await ssh(`tmux send-keys -t '${name}' '${claudeCmd}' Enter`, host);
+
+  // If an initial prompt was provided, wait for Claude to start (1.5s) then send it
+  if (initialPrompt) {
+    await new Promise<void>((r) => setTimeout(r, 1500));
+    const escaped = initialPrompt.replace(/'/g, "'\\''");
+    await ssh(`tmux send-keys -t '${name}' -- '${escaped}' Enter`, host);
+  }
+}
+
+export async function killSession(target: string, host?: string): Promise<void> {
+  await ssh(`tmux kill-window -t '${target}' 2>/dev/null || true`, host);
+}
+
+export async function renameWindow(target: string, newName: string, host?: string): Promise<void> {
+  // Sanitize: strip shell-dangerous characters, limit to 50 chars
+  const safeName = newName.replace(/['"\\`$;|&<>(){}!#]/g, "").trim().slice(0, 50);
+  if (!safeName) throw new Error("name must not be empty after sanitization");
+  const escaped = safeName.replace(/'/g, "'\\''");
+  await ssh(`tmux rename-window -t '${target}' '${escaped}'`, host);
+}
+
+export async function killEntireSession(sessionName: string, host?: string): Promise<void> {
+  await ssh(`tmux kill-session -t '${sessionName}' 2>/dev/null || true`, host);
 }
 
 export async function sendKeys(target: string, text: string, host?: string): Promise<void> {

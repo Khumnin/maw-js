@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>maw — Multi-Agent Workflow</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,34 +12,132 @@
   ::-webkit-scrollbar-thumb:hover { background: #3a3a4e; }
   body { background: #0a0a0f; color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 14px; }
 
-  .header { padding: 10px 20px; border-bottom: 1px solid #1a1a2e; display: flex; align-items: center; gap: 12px; }
-  .header h1 { font-size: 16px; color: #64b5f6; font-weight: 500; }
-  .header .target-name { font-size: 13px; color: #888; }
-  .header .status { font-size: 12px; margin-left: auto; }
-  .header .status.online { color: #4caf50; }
-  .header .status.offline { color: #f44336; }
-  .header .nav-links { display: flex; gap: 16px; margin-left: 16px; font-size: 14px; }
-  .header .nav-links a { color: rgba(255,255,255,0.5); text-decoration: none; transition: color 0.2s; }
-  .header .nav-links a:hover { color: rgba(255,255,255,0.8); }
-  .header .nav-links a.active { color: #26c6da; font-weight: bold; }
-
-  .container { display: flex; height: calc(100vh - 45px); }
-
-  .sidebar { width: 220px; border-right: 1px solid #1a1a2e; overflow-y: auto; flex-shrink: 0; }
-  .session { margin: 4px 0; }
-  .session-name { padding: 5px 16px; font-size: 10px; text-transform: uppercase; color: #444; letter-spacing: 1px; }
-  .window {
-    padding: 6px 12px 6px 16px; cursor: pointer; display: flex; align-items: center; gap: 6px;
-    transition: all 0.1s; border-left: 3px solid transparent; margin: 1px 0;
+  /* ── StatusBar — matches React StatusBar exactly ──────────────────────────── */
+  .statusbar {
+    position: sticky; top: 0; z-index: 20;
+    margin: 8px 8px 0;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.4);
   }
-  .window:hover { background: #1a1a2e; border-left-color: #333; }
-  .window.selected { background: #1a1a3e; border-left-color: #64b5f6; }
-  .window .idx { color: #555; font-size: 11px; width: 16px; text-align: right; }
-  .window .name { color: #999; font-size: 12px; }
-  .window:hover .name { color: #fff; }
-  .window.selected .name { color: #64b5f6; font-weight: bold; }
-  .window .dot { width: 6px; height: 6px; border-radius: 50%; background: #222; margin-left: auto; flex-shrink: 0; }
-  .window .dot.active { background: #4caf50; box-shadow: 0 0 4px #4caf50; }
+  /* Top row */
+  .statusbar-top {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+  }
+  .statusbar-brand {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  .statusbar-brand img { height: 26px; width: auto; object-fit: contain; }
+  .statusbar-title {
+    font-size: 13px; font-weight: bold; letter-spacing: 2px;
+    text-transform: uppercase; color: #F4001A;
+  }
+  .statusbar-right {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    font-size: 14px; color: rgba(255,255,255,0.7);
+  }
+  .statusbar-clock {
+    display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; flex-shrink: 0;
+  }
+  .statusbar-clock .time {
+    font-family: monospace; font-size: 12px; font-weight: bold;
+    color: rgba(255,255,255,0.8); font-variant-numeric: tabular-nums;
+  }
+  .statusbar-clock .date {
+    font-family: monospace; font-size: 10px; color: rgba(255,255,255,0.35);
+  }
+  .statusbar-divider {
+    width: 1px; height: 20px; background: rgba(255,255,255,0.1); flex-shrink: 0;
+  }
+  .statusbar-live {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  .statusbar-live .dot-live {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .statusbar-live .dot-live.online {
+    background: #4ade80; box-shadow: 0 0 6px #4caf50;
+  }
+  .statusbar-live .dot-live.offline {
+    background: #f87171; animation: pulse-offline 1s ease-in-out infinite;
+  }
+  @keyframes pulse-offline { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  .statusbar-live .live-text { font-size: 13px; display: none; } /* shown on desktop via media query */
+  .statusbar-count-agents { color: #22d3ee; font-weight: bold; } /* cyan-400 */
+  .statusbar-count-rooms  { color: #c084fc; font-weight: bold; } /* purple-400 */
+
+  /* Nav row */
+  .statusbar-nav {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 12px 8px; overflow-x: auto;
+    scrollbar-width: none; -ms-overflow-style: none;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .statusbar-nav::-webkit-scrollbar { display: none; }
+  .statusbar-nav a {
+    flex-shrink: 0; padding: 6px 10px; border-radius: 8px;
+    font-size: 12px; text-decoration: none; white-space: nowrap;
+    transition: color 0.2s, background 0.2s;
+    color: rgba(255,255,255,0.5);
+  }
+  .statusbar-nav a:hover { color: rgba(255,255,255,0.8); }
+  .statusbar-nav a.active { color: #22d3ee; font-weight: bold; background: rgba(34,211,238,0.1); }
+
+  /* Layout: fill remaining viewport below the statusbar */
+  .layout { display: flex; flex-direction: column; height: 100vh; }
+  .container { display: flex; flex: 1; min-height: 0; margin-top: 8px; }
+
+  .sidebar { width: 220px; border-right: 1px solid #1a1a2e; overflow-y: auto; flex-shrink: 0; padding: 4px 0; }
+  .session { margin: 1px 0; }
+  /* Primary row: session name + status dot */
+  .session-row {
+    padding: 7px 12px 7px 14px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    transition: all 0.1s; border-left: 3px solid transparent;
+  }
+  .session-row:hover { background: #1a1a2e; border-left-color: #333; }
+  .session-row.selected { background: #1a1a3e; border-left-color: #64b5f6; }
+  .session-row .sname {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #bbb; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .session-row:hover .sname { color: #fff; }
+  .session-row.selected .sname { color: #64b5f6; }
+  /* Secondary window rows: only shown for multi-window sessions */
+  .window-list { padding-left: 14px; }
+  .window-item {
+    padding: 3px 12px 3px 8px; cursor: pointer; display: flex; align-items: center; gap: 5px;
+    transition: all 0.1s; border-left: 2px solid transparent; margin: 1px 0;
+    font-size: 11px; color: #555;
+  }
+  .window-item:hover { background: #1a1a2e; color: #888; border-left-color: #333; }
+  .window-item.selected { color: #64b5f6; border-left-color: #64b5f6; }
+  .window-item .wname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .window-item .dot { width: 5px; height: 5px; border-radius: 50%; background: #222; flex-shrink: 0; }
+  /* Status dot on session row */
+  .session-row .dot { width: 6px; height: 6px; border-radius: 50%; background: #222; flex-shrink: 0; }
+  /* Status dot colors — 5 states */
+  .dot.working    { background: #22c55e; box-shadow: 0 0 4px #22c55e; animation: dot-working 1s ease-in-out infinite; }
+  .dot.waiting    { background: #eab308; box-shadow: 0 0 3px #eab30880; }
+  .dot.permission { background: #f97316; box-shadow: 0 0 6px #f97316; animation: dot-permission 1s ease-in-out infinite; }
+  .dot.error      { background: #ef4444; box-shadow: 0 0 3px #ef444480; }
+  .dot.idle       { background: #6b7280; }
+  /* Brief scale-pop when content updates */
+  .dot.blink      { animation: dot-update-blink 0.5s ease-out forwards; }
+  @keyframes dot-working {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.7); }
+  }
+  @keyframes dot-permission {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.6; transform: scale(1.6); }
+  }
+  @keyframes dot-update-blink {
+    0%   { transform: scale(1.8); opacity: 1; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
 
   /* Terminal pane — the whole right side */
   .term {
@@ -50,7 +148,7 @@
   .term-output {
     flex: 1; padding: 8px 12px; overflow-y: auto;
     background: #0a0a0f; font-size: 13px; line-height: 1.45;
-    white-space: pre-wrap; word-break: break-all; color: #aaa; line-height: 1.35;
+    white-space: pre; overflow-x: auto; color: #aaa; line-height: 1.35;
   }
   .term-output .placeholder { color: #333; text-align: center; margin-top: 30vh; font-size: 14px; }
 
@@ -86,22 +184,189 @@
   }
   .toast.error { background: #3a1a1a; color: #f44336; }
   .toast.show { opacity: 1; }
+
+  /* ── Notification bell ──────────────────────────────────────────────────── */
+  .notif-btn {
+    position: relative; margin-left: auto; cursor: pointer; font-size: 16px;
+    background: none; border: none; color: #888; padding: 2px 6px;
+    border-radius: 4px; transition: color 0.15s, background 0.15s;
+    display: flex; align-items: center; gap: 4px; user-select: none;
+  }
+  .notif-btn:hover { color: #ccc; background: #1a1a2e; }
+  .notif-btn.sound-off { color: #555; }
+  .notif-btn .notif-badge {
+    position: absolute; top: -3px; right: -3px;
+    background: #f97316; color: #fff; font-size: 9px; font-family: sans-serif;
+    font-weight: bold; border-radius: 999px; min-width: 14px; height: 14px;
+    display: flex; align-items: center; justify-content: center; padding: 0 3px;
+    line-height: 1;
+  }
+  .notif-dropdown {
+    position: absolute; top: calc(100% + 6px); right: 0;
+    background: #12121e; border: 1px solid #2a2a3e; border-radius: 6px;
+    padding: 10px 14px; min-width: 200px; z-index: 999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5); font-size: 12px; color: #aaa;
+    display: none;
+  }
+  .notif-dropdown.open { display: block; }
+  .notif-dropdown .nd-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 0; gap: 12px;
+  }
+  .notif-dropdown .nd-row + .nd-row { border-top: 1px solid #1a1a2e; }
+  .notif-dropdown .nd-label { color: #888; }
+  .notif-dropdown .nd-val { color: #ccc; font-weight: 600; cursor: pointer; }
+  .notif-dropdown .nd-val:hover { color: #64b5f6; }
+  .notif-wrapper { position: relative; display: flex; align-items: center; }
+
+  /* ── Hamburger menu toggle (mobile sidebar) ─────────────────────────────── */
+  .hamburger-btn {
+    display: none; background: none; border: none; cursor: pointer;
+    color: #888; font-size: 20px; padding: 4px 8px; line-height: 1;
+    border-radius: 4px; transition: background 0.15s, color 0.15s;
+    align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px;
+  }
+  .hamburger-btn:hover { background: #1a1a2e; color: #ccc; }
+
+  /* ── Mobile layout overrides ─────────────────────────────────────────────── */
+  @media (min-width: 640px) {
+    .statusbar { margin: 16px 24px 0; border-radius: 16px; }
+    .statusbar-top { padding: 12px 24px; gap: 16px; }
+    /* Desktop nav: no border, larger padding */
+    .statusbar-nav { padding: 0 24px 12px; gap: 4px; border-top: none; }
+    .statusbar-brand img { height: 32px; }
+    .statusbar-title { font-size: 15px; }
+    .statusbar-right { gap: 20px; }
+    .statusbar-clock .time { font-size: 13px; }
+    .statusbar-nav a { font-size: 14px; }
+    .statusbar-divider { display: block; }
+    /* Show live-text label on desktop */
+    .statusbar-live .live-text { display: inline; }
+    /* Show date on desktop */
+    .statusbar-clock .date { display: block; }
+  }
+
+  /* Mobile defaults */
+  .statusbar-divider { display: none; }
+  .statusbar-clock .date { display: none; }
+  /* Hide agent/room count labels on small screens (show numbers only) */
+  .statusbar-label { display: none; }
+
+  @media (max-width: 639px) {
+    /* Viewport height: use dvh to account for mobile browser chrome */
+    .container { height: calc(100dvh - 4px); }
+
+    /* Hamburger: show on mobile */
+    .hamburger-btn { display: flex; }
+
+    /* Sidebar: hidden by default, slides in on toggle */
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+      width: 240px; transform: translateX(-100%);
+      transition: transform 0.25s ease; background: #0d0d14;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.6);
+    }
+    .sidebar.open { transform: translateX(0); }
+
+    /* Overlay backdrop when sidebar is open */
+    .sidebar-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 99;
+      background: rgba(0,0,0,0.5);
+    }
+    .sidebar-backdrop.open { display: block; }
+
+    /* Terminal: full width always */
+    .term { min-width: 0; width: 100%; }
+
+    /* Input line: larger touch target */
+    .term-input-line { min-height: 44px; padding: 8px 12px; font-size: 14px; }
+
+    /* Session rows: larger touch targets */
+    .session-row { min-height: 44px; }
+    .window-item { min-height: 36px; }
+
+    /* Notification btn: touch target */
+    .notif-btn { min-width: 44px; min-height: 44px; }
+  }
+
+  @media (max-width: 480px) {
+    .statusbar-brand img { height: 24px !important; }
+    .statusbar-title { font-size: 12px; }
+  }
 </style>
 </head>
 <body>
+<div class="layout">
 
-<div class="header">
-  <h1>maw <span style="color:#555;font-weight:400;font-size:12px">by cat lab</span></h1>
-  <span class="target-name" id="targetName"></span>
-  <span class="status offline" id="status">connecting...</span>
-  <div class="nav-links">
+<header class="statusbar" id="statusbar">
+  <!-- Top row: brand + clock + status + bell -->
+  <div class="statusbar-top">
+    <!-- Left: hamburger (mobile) + logo + title -->
+    <div class="statusbar-brand">
+      <button class="hamburger-btn" id="hamburgerBtn" title="Toggle sidebar" aria-label="Toggle sidebar">&#9776;</button>
+      <img src="/office/tigersoft-logo-trimmed.png" alt="TigerSoft" />
+      <span class="statusbar-title">Terminal</span>
+    </div>
+
+    <!-- Right: clock + divider + live dot + counts + bell -->
+    <div class="statusbar-right">
+      <!-- Clock -->
+      <div class="statusbar-clock">
+        <span class="time" id="clockTime">--:--:--</span>
+        <span class="date" id="clockDate"></span>
+      </div>
+
+      <span class="statusbar-divider"></span>
+
+      <!-- Live indicator -->
+      <span class="statusbar-live">
+        <span class="dot-live offline" id="statusDot"></span>
+        <span class="live-text" id="statusText">CONNECTING</span>
+      </span>
+
+      <!-- Agent count -->
+      <span id="agentCount" style="display:none">
+        <strong class="statusbar-count-agents" id="agentNum">0</strong><span class="statusbar-label"> agents</span>
+      </span>
+
+      <!-- Room count -->
+      <span id="roomCount" style="display:none">
+        <strong class="statusbar-count-rooms" id="roomNum">0</strong><span class="statusbar-label"> rooms</span>
+      </span>
+
+      <!-- Notification bell -->
+      <div class="notif-wrapper" id="notifWrapper">
+        <button class="notif-btn" id="notifBtn" title="Notifications">
+          🔔
+          <span class="notif-badge" id="notifBadge" style="display:none"></span>
+        </button>
+        <div class="notif-dropdown" id="notifDropdown">
+          <div class="nd-row">
+            <span class="nd-label">Sound</span>
+            <span class="nd-val" id="ndSound">ON</span>
+          </div>
+          <div class="nd-row">
+            <span class="nd-label">Browser alerts</span>
+            <span class="nd-val" id="ndBrowser">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nav row -->
+  <nav class="statusbar-nav">
     <a href="/office/#office">Office</a>
     <a href="/office/#mission">Mission</a>
+    <a href="/office/#tokens">Tokens</a>
+    <a href="/office/#command">Command</a>
     <a href="/" class="active">Terminal</a>
     <a href="/dashboard">Orbital</a>
-  </div>
-</div>
+  </nav>
+</header>
 
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 <div class="container">
   <div class="sidebar" id="sidebar"></div>
   <div class="term" id="term" tabindex="0">
@@ -115,6 +380,7 @@
   </div>
 </div>
 
+</div><!-- /.layout -->
 <div class="toast" id="toast"></div>
 
 <script>
@@ -129,7 +395,7 @@ function ansi(text) {
   let h='',fg=null,bg=null,b=0,d=0,i=0,u=0,s=0,open=0;
   for (const p of text.split(/(\x1b\[[0-9;]*m)/)) {
     const m = p.match(/^\x1b\[([0-9;]*)m$/);
-    if (!m) { h += esc(p); continue; }
+    if (!m) { h += linkify(esc(p)); continue; }
     if (open) { h += '</span>'; open = 0; }
     const codes = m[1] ? m[1].split(';').map(Number) : [0];
     for (let j=0; j<codes.length; j++) {
@@ -160,22 +426,70 @@ function ansi(text) {
   return h;
 }
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function linkify(html) {
+  return html.replace(/(?<!href=["'])https?:\/\/[^\s<>"'`\][\)]+/g, function(url) {
+    var stripped = url.replace(/[.,;:!?\)\]'"`]+$/, '');
+    var suffix = url.slice(stripped.length);
+    return '<a href="' + stripped + '" target="_blank" rel="noopener noreferrer" style="color:#5ff;text-decoration:underline;cursor:pointer">' + stripped + '</a>' + suffix;
+  });
+}
 
 // State
 let ws = null, selectedTarget = null, inputBuf = '', lastSessions = '';
+
+// ── Live clock ────────────────────────────────────────────────────────────────
+(function startClock() {
+  function tick() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const dateStr = now.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    const t = el('clockTime'); if (t) t.textContent = timeStr;
+    const d = el('clockDate'); if (d) d.textContent = dateStr;
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// ── Connection status helpers ─────────────────────────────────────────────────
+function setConnected(online) {
+  const dot = el('statusDot');
+  const txt = el('statusText');
+  if (dot) {
+    dot.className = 'dot-live ' + (online ? 'online' : 'offline');
+  }
+  // Show "LIVE" / "RECONNECTING" text — always visible
+  if (txt) {
+    txt.textContent = online ? 'LIVE' : 'RECONNECTING';
+  }
+}
+
+// ── Session count display ─────────────────────────────────────────────────────
+function updateCounts(sessions) {
+  const agentEl  = el('agentCount');
+  const agentNum = el('agentNum');
+  const roomEl   = el('roomCount');
+  const roomNum  = el('roomNum');
+  if (!sessions) return;
+  // agentCount = total windows across all sessions
+  const totalWindows = sessions.reduce((sum, s) => sum + (s.windows ? s.windows.length : 1), 0);
+  const totalRooms   = sessions.length;
+  if (agentEl) agentEl.style.display = '';
+  if (agentNum) agentNum.textContent = totalWindows;
+  if (roomEl)  roomEl.style.display  = '';
+  if (roomNum) roomNum.textContent   = totalRooms;
+}
 
 // WebSocket
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}/ws`);
   ws.onopen = () => {
-    el('status').textContent = 'live';
-    el('status').className = 'status online';
-    if (selectedTarget) ws.send(JSON.stringify({ type: 'subscribe', target: selectedTarget }));
+    setConnected(true);
+    if (selectedTarget) ws.send(JSON.stringify({ type: 'subscribe', target: selectedTarget, lines: 2000 }));
   };
   ws.onmessage = (e) => {
     const data = JSON.parse(e.data);
-    if (data.type === 'sessions') renderSidebar(data.sessions);
+    if (data.type === 'sessions') { renderSidebar(data.sessions); updateCounts(data.sessions); }
     else if (data.type === 'capture') {
       const out = el('output');
       const atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 60;
@@ -186,8 +500,7 @@ function connect() {
     else if (data.type === 'error') showToast(data.error, true);
   };
   ws.onclose = () => {
-    el('status').textContent = 'reconnecting...';
-    el('status').className = 'status offline';
+    setConnected(false);
     setTimeout(connect, 1000);
   };
   ws.onerror = () => ws.close();
@@ -199,31 +512,63 @@ function el(id) { return document.getElementById(id); }
 function renderSidebar(sessions) {
   const json = JSON.stringify(sessions);
   if (lastSessions === json) {
-    document.querySelectorAll('.window').forEach(e => e.classList.toggle('selected', e.dataset.target === selectedTarget));
+    // Just refresh selected state without re-rendering
+    document.querySelectorAll('.session-row').forEach(e => e.classList.toggle('selected', e.dataset.target === selectedTarget));
+    document.querySelectorAll('.window-item').forEach(e => e.classList.toggle('selected', e.dataset.target === selectedTarget));
     return;
   }
   lastSessions = json;
   const sb = el('sidebar');
-  sb.innerHTML = sessions.map(s => `<div class="session">
-    <div class="session-name">${esc(s.name)}</div>
-    ${s.windows.map(w => {
-      const t = s.name+':'+w.index;
-      return `<div class="window ${selectedTarget===t?'selected':''}" data-target="${t}" data-name="${esc(w.name)}">
-        <span class="idx">${w.index}</span><span class="name">${esc(w.name)}</span>
-        <span class="dot ${w.active?'active':''}"></span></div>`;
-    }).join('')}</div>`).join('');
-  sb.querySelectorAll('.window').forEach(e => e.addEventListener('click', () => selectWindow(e.dataset.target, e.dataset.name)));
+  sb.innerHTML = sessions.map(s => {
+    const multiWindow = s.windows.length > 1;
+    // For single-window sessions, the primary target is the only window.
+    // For multi-window sessions, clicking the session row selects window 0 (or first).
+    const primaryWindow = s.windows[0];
+    const primaryTarget = primaryWindow ? s.name + ':' + primaryWindow.index : '';
+
+    // Session-level dot: use primary window's data-dot for the session row dot
+    const sessionRowSelected = s.windows.some(w => s.name + ':' + w.index === selectedTarget);
+
+    const sessionRow = `<div class="session-row ${sessionRowSelected ? 'selected' : ''}" data-target="${primaryTarget}" data-name="${esc(primaryWindow ? primaryWindow.name : s.name)}">
+      <span class="sname">${esc(s.name)}</span>
+      <span class="dot" data-dot="${primaryTarget}"></span>
+    </div>`;
+
+    // Only render window sub-rows for multi-window sessions
+    const windowRows = multiWindow
+      ? `<div class="window-list">${s.windows.map(w => {
+          const t = s.name + ':' + w.index;
+          return `<div class="window-item ${selectedTarget === t ? 'selected' : ''}" data-target="${t}" data-name="${esc(w.name)}">
+            <span class="wname">${esc(w.name)}</span>
+            <span class="dot" data-dot="${t}"></span>
+          </div>`;
+        }).join('')}</div>`
+      : '';
+
+    return `<div class="session">${sessionRow}${windowRows}</div>`;
+  }).join('');
+
+  // Bind click handlers
+  sb.querySelectorAll('.session-row').forEach(e =>
+    e.addEventListener('click', () => selectWindow(e.dataset.target, e.dataset.name))
+  );
+  sb.querySelectorAll('.window-item').forEach(e =>
+    e.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      selectWindow(e.dataset.target, e.dataset.name);
+    })
+  );
 }
 
 function selectWindow(target, name) {
   selectedTarget = target;
   inputBuf = '';
   updateInputLine();
-  el('targetName').textContent = name;
+  // targetName element removed — selected window shown in terminal title bar
   el('output').innerHTML = '<div class="placeholder">connecting...</div>';
-  document.querySelectorAll('.window').forEach(e => e.classList.toggle('selected', e.dataset.target === target));
+  document.querySelectorAll('.session-row, .window-item').forEach(e => e.classList.toggle('selected', e.dataset.target === target));
   if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify({ type: 'subscribe', target }));
+    ws.send(JSON.stringify({ type: 'subscribe', target, lines: 2000 }));
     ws.send(JSON.stringify({ type: 'select', target }));
   }
   el('term').focus();
@@ -273,7 +618,7 @@ el('term').addEventListener('keydown', (e) => {
   if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     e.preventDefault();
     if (!selectedTarget) return;
-    const wins = [...document.querySelectorAll('.window')].map(el => ({ target: el.dataset.target, name: el.dataset.name }));
+    const wins = [...document.querySelectorAll('.session-row, .window-item')].map(el => ({ target: el.dataset.target, name: el.dataset.name }));
     const idx = wins.findIndex(w => w.target === selectedTarget);
     if (idx < 0) return;
     const dir = e.key === 'ArrowLeft' ? -1 : 1;
@@ -291,6 +636,9 @@ el('term').addEventListener('keydown', (e) => {
       queueSend(inputBuf);
       inputBuf = '';
       updateInputLine();
+    } else {
+      // Empty buffer: send bare carriage return so tmux prompts (y/n, etc.) can be confirmed
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text: '\r' }));
     }
   } else if (e.key === 'Backspace') {
     e.preventDefault();
@@ -301,9 +649,27 @@ el('term').addEventListener('keydown', (e) => {
       inputBuf = inputBuf.slice(0, -1);
     }
     updateInputLine();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text: '\x1b[A' }));
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text: '\x1b[B' }));
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text: '\x1b[D' }));
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text: '\x1b[C' }));
   } else if (e.key === 'Escape') {
     e.preventDefault();
-    clearInput();
+    // Send Escape to the tmux agent (e.g. to cancel a Claude Code permission prompt).
+    // Use Ctrl+C or click the "esc" button to clear the local input buffer instead.
+    if (ws && ws.readyState === 1 && selectedTarget) {
+      ws.send(JSON.stringify({ type: 'send', target: selectedTarget, text: '\x1b' }));
+    } else {
+      clearInput();
+    }
   } else if (e.key === 'c' && e.ctrlKey) {
     // Ctrl+C = clear
     e.preventDefault();
@@ -327,6 +693,34 @@ el('clearBtn').addEventListener('click', (e) => {
   el('term').focus();
 });
 
+// Paste → detect image or text, upload image and insert path
+el('term').addEventListener('paste', async (e) => {
+  e.preventDefault();
+  const items = Array.from(e.clipboardData.items);
+  const imageItem = items.find(item => item.type.startsWith('image/'));
+  if (imageItem) {
+    const blob = imageItem.getAsFile();
+    if (blob) {
+      try {
+        const fd = new FormData();
+        fd.append('image', blob, 'paste.png');
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.path) {
+          inputBuf += data.path;
+          updateInputLine();
+        }
+      } catch {}
+    }
+    return;
+  }
+  const text = e.clipboardData.getData('text');
+  if (text) {
+    inputBuf += text;
+    updateInputLine();
+  }
+});
+
 // Keep focus on term
 el('term').addEventListener('click', () => el('term').focus());
 
@@ -337,13 +731,438 @@ function showToast(msg, error = false) {
   setTimeout(() => t.className = 'toast', 1500);
 }
 
-// Restore selection from URL hash
+// ── Status detection ─────────────────────────────────────────────────────────
+// Mirrors the 5-state algorithm in office/src/hooks/useSessions.ts
+
+/** djb2-style string hash */
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+/** Strip ANSI escape codes */
+function stripAnsi(s) {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\x1b[()][AB012]/g, '');
+}
+
+// Per-window hash history: target → { prev, curr, unchangedCount }
+const dotHashHistory = {};
+// Sticky-working cooldown: target → remaining polls to force "working"
+const workingCooldown = {};
+
+// Detection patterns (mirrors agent-tracker.ts exactly)
+// SPINNER_RE: braille/dot chars that are ALWAYS mid-spin (no false positives).
+const SPINNER_RE    = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏∴·◐◑◒◓⣾⣽⣻⢿⡿⣟⣯⣷]/;
+// ACTIVE_VERB_RE: ✢✻✶⏺ + * lines are active ONLY when they contain "…" or "..."
+// (present-tense Claude activity like "✶ Vibing… (9m)" / "+ Proofing… (30m)").
+// Completion lines like "✻ Worked for 8m 26s" do NOT have "…" and are excluded.
+const ACTIVE_VERB_RE = /^[✢✻✶⏺+*]\s+\S.*[…\.]{1}/m;
+const TOOL_RE       = /● \w+\(|\b(Read|Edit|Write|Bash|Grep|Glob|Agent)\b/;
+const PROMPT_RE     = /\u276f|\n[$%] |\n[$%]$/;
+// Permission prompt detection — requires BOTH the question AND numbered options to be present.
+// This prevents false positives from words like "permission" appearing in normal text output
+// (e.g. Thai text, log messages) or "accept edits on" from Claude Code's edit-mode hint.
+// A real Claude Code permission prompt always has:
+//   1. "Do you want to proceed?" — the confirmation question
+//   2. Numbered options like "1. Yes" / "2. No"
+function hasPermissionPrompt(text) {
+  const hasQuestion = /Do you want to proceed/i.test(text);
+  const hasOptions  = /\d+\.\s*(Yes|No|Don't|don't|Allow)/i.test(text);
+  return hasQuestion && hasOptions;
+}
+
+/**
+ * Extract the action description from a Claude Code permission prompt.
+ * Walks backwards from "Do you want to proceed?" skipping warning lines
+ * that start with "Contains", returning the first meaningful action line.
+ */
+function extractActionName(text) {
+  // Strip ANSI escape codes
+  const stripped = text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+  const lines = stripped.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const proceedIdx = lines.findIndex(l => /do you want to proceed/i.test(l));
+  if (proceedIdx <= 0) return '';
+  for (let i = proceedIdx - 1; i >= 0; i--) {
+    const line = lines[i];
+    // Skip empty lines
+    if (line.length === 0) continue;
+    // Skip "Do you want to proceed?" itself (in case it appears again)
+    if (/do you want to proceed/i.test(line)) continue;
+    // Skip Claude Code warning patterns (case-insensitive)
+    if (/contains/i.test(line)) continue;
+    if (/obfuscation/i.test(line)) continue;
+    if (/could separate/i.test(line)) continue;
+    // Skip Esc/Tab hint lines
+    if (/^esc\s+to/i.test(line) || /^tab\s+to/i.test(line)) continue;
+    // Skip menu option lines (› 1. Yes, 2. No, etc.)
+    if (/^\s*[❯›>]?\s*\d+\.\s/.test(line)) continue;
+    if (/^[❯›>]\s/.test(line)) continue;
+    return line.length > 120 ? line.slice(0, 117) + '…' : line;
+  }
+  return '';
+}
+
+const ERROR_RE      = /\b(Error|SIGTERM|panic:|fatal:|command not found|exit status \d+)\b/i;
+const BARE_SHELL_RE = /^(bash|zsh|sh)\s*$/m;
+
+// Per-target blink timers
+const blinkTimers = {};
+
+function classifyStatus(text, target) {
+  // Exclude bottom 15% (status bar, prompt line, timers)
+  const allLines = text.split('\n');
+  const cutoff   = Math.max(1, Math.floor(allLines.length * 0.85));
+  const topPart  = allLines.slice(0, cutoff).join('\n');
+  const contentHash = hashStr(topPart);
+
+  const entry = dotHashHistory[target] || { prev: 0, curr: 0, unchangedCount: 0 };
+  entry.prev = entry.curr;
+  entry.curr = contentHash;
+
+  const changed = entry.prev !== 0 && entry.prev !== entry.curr;
+  if (changed) {
+    entry.unchangedCount = 0;
+    workingCooldown[target] = 5; // stay working for 5 more polls (10s)
+  } else {
+    entry.unchangedCount++;
+    if (workingCooldown[target] > 0) workingCooldown[target]--;
+  }
+  dotHashHistory[target] = entry;
+
+  // Check bottom 10 / 5 non-empty lines for indicators
+  const lines    = text.split('\n').filter(l => l.trim());
+  const bottom10 = lines.slice(-10).join('\n');
+  const bottom5  = lines.slice(-5).join('\n');
+
+  // Prepend newline so PROMPT_RE's \n-anchored patterns work on the first bottom line
+  const hasPrompt     = PROMPT_RE.test('\n' + bottom5);
+  // Tmux status bar consumes up to 5 lines, so check bottom10 for spinner/tool
+  // so we never miss an active spinner above the status bar.
+  const hasSpinner    = SPINNER_RE.test(bottom10) || ACTIVE_VERB_RE.test(bottom10) || TOOL_RE.test(bottom10);
+  const hasPermission = hasPermissionPrompt(bottom10);
+  const hasError      = ERROR_RE.test(bottom5) || BARE_SHELL_RE.test(text.trim());
+
+  // Trigger update-blink on content change
+  if (changed) {
+    triggerUpdateBlink(target);
+  }
+
+  // ── 5-state classification (priority order) ──────────────────────────────
+  // 1. permission — highest priority
+  if (hasPermission) return 'permission';
+  // 2. working — content changing or spinner visible
+  if (changed || hasSpinner) return 'working';
+  // 3. sticky-working cooldown — recent activity, hold "working" for up to 10s
+  //    before allowing a downgrade to waiting/idle. Prevents false "waiting" flashes
+  //    during Claude's think→output→think cycles (2-3s silent gaps between bursts).
+  if ((workingCooldown[target] ?? 0) > 0) return 'working';
+  // 4. waiting — prompt visible and stable for 5+ polls (10s)
+  if (hasPrompt && entry.unchangedCount >= 5) return 'waiting';
+  // 5. error — crash signals or very long idle with no prompt
+  if (hasError || entry.unchangedCount > 30) return 'error';
+  // 6. cooling 6–12 polls (no cooldown active)
+  if (entry.unchangedCount <= 12) return hasPrompt ? 'waiting' : 'idle';
+  // 7. long stable
+  return hasPrompt ? 'waiting' : 'idle';
+}
+
+function triggerUpdateBlink(target) {
+  const dot = document.querySelector(`.dot[data-dot="${CSS.escape(target)}"]`);
+  if (!dot) return;
+  // Remove and re-add blink class to restart animation
+  dot.classList.remove('blink');
+  // Force reflow so the class removal takes effect before re-adding
+  void dot.offsetWidth;
+  dot.classList.add('blink');
+  clearTimeout(blinkTimers[target]);
+  blinkTimers[target] = setTimeout(() => {
+    dot.classList.remove('blink');
+  }, 500);
+}
+
+function applyDotStatus(target, status) {
+  const dot = document.querySelector(`.dot[data-dot="${CSS.escape(target)}"]`);
+  if (!dot) return;
+  // Preserve blink class if currently animating, set base status class
+  const hasBlink = dot.classList.contains('blink');
+  dot.className = 'dot ' + status + (hasBlink ? ' blink' : '');
+}
+
+let statusPollTimer = null;
+
+async function pollStatuses() {
+  // Collect all targets currently rendered in the sidebar
+  const targets = [...document.querySelectorAll('.dot[data-dot]')].map(d => d.dataset.dot);
+  if (targets.length === 0) { schedulePoll(); return; }
+
+  // Fetch in batches of 4 (same as office hook)
+  for (let i = 0; i < targets.length; i += 4) {
+    const batch = targets.slice(i, i + 4);
+    await Promise.allSettled(batch.map(async (target) => {
+      try {
+        const res  = await fetch(`/api/capture?target=${encodeURIComponent(target)}&lines=2000`);
+        const data = await res.json();
+        const raw  = data.content || '';
+        const text = stripAnsi(raw);
+        const status = classifyStatus(text, target);
+        applyDotStatus(target, status);
+        // Notification hook: derive a short preview from the last non-empty lines
+        const previewLines = text.split('\n').filter(l => l.trim()).slice(-5).join(' ').trim();
+        handleNotifForTarget(target, status, previewLines);
+      } catch { /* ignore fetch errors silently */ }
+    }));
+  }
+  schedulePoll();
+}
+
+function schedulePoll() {
+  clearTimeout(statusPollTimer);
+  statusPollTimer = setTimeout(pollStatuses, 2000);
+}
+
+// ── Notification system ───────────────────────────────────────────────────────
+// Mirrors useNotifications.ts but implemented as plain vanilla JS.
+
+const NOTIF_STORAGE_KEY = 'maw-notification-prefs';
+
+/** Load notification prefs from localStorage */
+function loadNotifPrefs() {
+  try {
+    const raw = localStorage.getItem(NOTIF_STORAGE_KEY);
+    if (raw) return Object.assign({ soundEnabled: true, browserEnabled: true }, JSON.parse(raw));
+  } catch {}
+  return { soundEnabled: true, browserEnabled: true };
+}
+
+/** Save notification prefs to localStorage */
+function saveNotifPrefs() {
+  try {
+    localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(notifPrefs));
+  } catch {}
+}
+
+const notifPrefs = loadNotifPrefs();
+/** Agents currently in permission state: target → true */
+const permissionTargets = {};
+/** Agents already notified in this permission cycle — cleared when they leave permission */
+const notifiedTargets = new Set();
+/** Badge count: how many targets are currently in permission state */
+let permissionCount = 0;
+
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new AudioContext(); } catch { return null; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  return audioCtx;
+}
+
+/** Play a two-note chime identical to the React version */
+function playPermissionTone() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const frequencies = [880, 660];
+    let startTime = ctx.currentTime;
+    for (const freq of frequencies) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.12, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.25);
+      osc.start(startTime);
+      osc.stop(startTime + 0.25);
+      startTime += 0.18;
+    }
+  } catch {}
+}
+
+/** Trigger browser notification for one agent target */
+function fireBrowserNotification(target, previewText) {
+  if (Notification.permission !== 'granted') return;
+  if (!notifPrefs.browserEnabled) return;
+  try {
+    const name = target.replace(/:(\d+)$/, ' ($1)');
+    const actionName = previewText ? extractActionName(previewText) : '';
+    const body = (actionName || previewText || 'Permission requested').slice(0, 120);
+    new Notification(name + ': needs permission', {
+      body,
+      icon: '/tigersoft-logo.png',
+      tag: 'maw-permission-' + target,
+      requireInteraction: false,
+    });
+  } catch {}
+}
+
+/** Update document title badge and bell badge */
+function updateNotifBadge() {
+  const badge = el('notifBadge');
+  if (permissionCount > 0) {
+    document.title = '(' + permissionCount + ') TigerSpace Terminal';
+    badge.textContent = permissionCount;
+    badge.style.display = 'flex';
+  } else {
+    document.title = 'TigerSpace Terminal';
+    badge.style.display = 'none';
+  }
+}
+
+/**
+ * Called from pollStatuses after classifying each target.
+ * status: the newly classified status string.
+ * previewText: last few lines of terminal content for notification body.
+ */
+function handleNotifForTarget(target, status, previewText) {
+  const wasPermission = !!permissionTargets[target];
+  const isPermission = status === 'permission';
+
+  if (isPermission && !wasPermission) {
+    // Newly entered permission state
+    permissionTargets[target] = true;
+    permissionCount++;
+
+    if (!notifiedTargets.has(target)) {
+      notifiedTargets.add(target);
+      if (notifPrefs.soundEnabled) playPermissionTone();
+      fireBrowserNotification(target, previewText);
+    }
+    updateNotifBadge();
+  } else if (!isPermission && wasPermission) {
+    // Left permission state — clear so next permission event fires again
+    delete permissionTargets[target];
+    notifiedTargets.delete(target);
+    permissionCount = Math.max(0, permissionCount - 1);
+    updateNotifBadge();
+  }
+}
+
+/** Request browser notification permission on first user gesture */
+let notifPermissionRequested = false;
+function ensureNotifPermission() {
+  if (notifPermissionRequested) return;
+  notifPermissionRequested = true;
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().then(result => {
+      notifPrefs.browserEnabled = result === 'granted';
+      updateNotifDropdown();
+    });
+  }
+}
+document.addEventListener('click', ensureNotifPermission, { once: true });
+
+/** Update dropdown labels */
+function updateNotifDropdown() {
+  const ndSound = el('ndSound');
+  const ndBrowser = el('ndBrowser');
+  const btn = el('notifBtn');
+
+  ndSound.textContent = notifPrefs.soundEnabled ? 'ON' : 'OFF';
+  ndSound.style.color = notifPrefs.soundEnabled ? '#4caf50' : '#f44336';
+
+  if (typeof Notification === 'undefined') {
+    ndBrowser.textContent = 'not supported';
+    ndBrowser.style.color = '#555';
+  } else if (Notification.permission === 'granted') {
+    ndBrowser.textContent = notifPrefs.browserEnabled ? 'enabled' : 'disabled';
+    ndBrowser.style.color = notifPrefs.browserEnabled ? '#4caf50' : '#f44336';
+  } else if (Notification.permission === 'denied') {
+    ndBrowser.textContent = 'blocked';
+    ndBrowser.style.color = '#f44336';
+  } else {
+    ndBrowser.textContent = 'click to allow';
+    ndBrowser.style.color = '#eab308';
+  }
+
+  btn.classList.toggle('sound-off', !notifPrefs.soundEnabled);
+}
+
+// Bell button: toggle dropdown
+el('notifBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  ensureNotifPermission();
+  el('notifDropdown').classList.toggle('open');
+  updateNotifDropdown();
+});
+
+// Click outside → close dropdown
+document.addEventListener('click', (e) => {
+  if (!el('notifWrapper').contains(e.target)) {
+    el('notifDropdown').classList.remove('open');
+  }
+});
+
+// Toggle sound from dropdown
+el('ndSound').addEventListener('click', () => {
+  notifPrefs.soundEnabled = !notifPrefs.soundEnabled;
+  saveNotifPrefs();
+  updateNotifDropdown();
+});
+
+// Toggle browser notifications from dropdown
+el('ndBrowser').addEventListener('click', () => {
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'default') {
+    ensureNotifPermission();
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    notifPrefs.browserEnabled = !notifPrefs.browserEnabled;
+    saveNotifPrefs();
+    updateNotifDropdown();
+  }
+});
+
+// Initialize dropdown state on load
+updateNotifDropdown();
+
+// ── Restore selection from URL hash ──────────────────────────────────────────
 if (location.hash) {
   const saved = decodeURIComponent(location.hash.slice(1));
   if (saved) { selectedTarget = saved; }
 }
 connect();
+// Start status poller after a short delay to let sidebar populate first
+setTimeout(pollStatuses, 1500);
 setTimeout(() => el('term').focus(), 100);
+
+// ── Mobile sidebar toggle ────────────────────────────────────────────────────
+(function() {
+  const btn = el('hamburgerBtn');
+  const sidebar = el('sidebar');
+  const backdrop = el('sidebarBackdrop');
+  if (!btn || !sidebar || !backdrop) return;
+
+  function openSidebar() {
+    sidebar.classList.add('open');
+    backdrop.classList.add('open');
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    backdrop.classList.remove('open');
+  }
+
+  btn.addEventListener('click', function() {
+    if (sidebar.classList.contains('open')) closeSidebar();
+    else openSidebar();
+  });
+  backdrop.addEventListener('click', closeSidebar);
+
+  // Close sidebar when a session is selected on mobile
+  document.addEventListener('click', function(e) {
+    const row = e.target.closest && e.target.closest('.session-row, .window-item');
+    if (row && window.innerWidth <= 768) {
+      setTimeout(closeSidebar, 150);
+    }
+  });
+})();
 </script>
 </body>
 </html>

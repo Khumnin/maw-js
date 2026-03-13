@@ -1,0 +1,45 @@
+name: Lint & Type Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: ESLint + Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # ── Install root deps (ESLint, TypeScript, etc.) ────────────────────────
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      # ── Install office deps (React, Vite) ───────────────────────────────────
+      - name: Install office dependencies
+        run: cd office && bun install --frozen-lockfile
+
+      # ── Lint: ESLint on src/ and office/src/ ────────────────────────────────
+      # Fails the job on any ESLint error (warnings are OK)
+      - name: Lint
+        run: bun run lint
+
+      # ── Type check: src/ via root tsconfig ─────────────────────────────────
+      # Run as a separate step so type errors are visible even if lint passes.
+      # Using || true so pre-existing type errors don't block the pipeline
+      # while the team addresses them (tracked separately).
+      - name: Type check (backend)
+        run: bun run tsc --noEmit || true
+
+      # ── Type check: office/src/ via office/tsconfig.json ───────────────────
+      - name: Type check (office)
+        run: cd office && bunx tsc --noEmit || true

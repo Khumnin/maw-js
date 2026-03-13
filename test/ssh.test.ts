@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { findWindow } from "../src/ssh";
-import type { Session } from "../src/ssh";
+import { findWindow } from "../src/services/ssh";
+import type { Session } from "../src/services/ssh";
 
 const MOCK_SESSIONS: Session[] = [
   {

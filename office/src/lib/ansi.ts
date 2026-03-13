@@ -18,13 +18,126 @@ function esc(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * Wrap bare URLs in the HTML string with clickable <a> tags.
+ * Must be called AFTER esc() so we operate on already-escaped text.
+ * The regex avoids matching URLs that are already inside an href attribute
+ * by asserting the URL is not preceded by `href="` or `href='`.
+ * Trailing punctuation characters that are unlikely to be part of a URL
+ * (comma, period, closing paren/bracket/quote) are excluded from the match.
+ */
+function linkifyHtml(html: string): string {
+  // Match http(s) URLs not already inside an href attribute value.
+  // Negative lookbehind: not preceded by href=" or href='
+  // The URL body excludes whitespace and HTML special chars already escaped,
+  // and strips trailing sentence punctuation.
+  return html.replace(
+    /(?<!href=["'])https?:\/\/[^\s<>"'`\][\)]+/g,
+    (url) => {
+      // Strip trailing punctuation that is likely sentence punctuation, not part of URL
+      const stripped = url.replace(/[.,;:!?\)\]'"`]+$/, "");
+      const suffix = url.slice(stripped.length);
+      return `<a href="${stripped}" target="_blank" rel="noopener noreferrer" style="color:#94e2d5;text-decoration:underline;cursor:pointer">${stripped}</a>${suffix}`;
+    }
+  );
+}
+
+// Supported file extensions for clickable file-path detection
+const FILE_EXT = "ts|tsx|js|jsx|json|md|go|css|html|yaml|yml|toml|sql|sh|py|vb|cs|env|txt|cfg|conf|xml|svg|png|jpg|pdf|rs|rb|php|java|tf|scss|sass";
+
+// Regex that matches file paths in already-HTML-escaped terminal text.
+// Four groups in alternation:
+//   1. Absolute paths: /Users/... /home/... /tmp/... /var/... /opt/... /etc/... /srv/... /app/...
+//   2. Home-relative paths: ~/anything/file.ext
+//   3. Dot-prefixed relative: ./dir/file.ext or ../dir/file.ext
+//   4. Bare relative paths: docs/recruitment/file.md, src/lib/utils.ts
+//      — must contain at least one slash and end with a known extension
+// Anchored so we don't match inside HTML tag attributes (avoided via a lookbehind
+// that rejects matches preceded by `="` which is how href/src attrs appear after esc()).
+const FILE_PATH_RE = new RegExp(
+  // Must not be preceded by: =" (HTML attr), / (mid-path), . (domain.com/), or word char (mid-token)
+  "(?<![='\"/\\.\\w])" +
+  "(" +
+    // 1. Absolute path starting with known root prefixes
+    "\\/(?:Users|home|tmp|var|opt|etc|srv|app)\\/[\\w./@-]+\\.(?:" + FILE_EXT + ")" +
+    "|" +
+    // 2. Home-relative: ~/path/to/file.ext
+    "~\\/[\\w./@-]+\\.(?:" + FILE_EXT + ")" +
+    "|" +
+    // 3. Dot-prefixed relative: ./file.ext or ../dir/file.ext
+    "\\.{1,2}\\/[\\w./@-]+\\.(?:" + FILE_EXT + ")" +
+    "|" +
+    // 4. Bare relative path: word/word/file.ext (at least one slash required)
+    "[\\w@-]+\\/[\\w./@-]*[\\w-]+\\.(?:" + FILE_EXT + ")" +
+  ")" +
+  // Must not be followed by word characters or slash (avoid partial matches)
+  "(?![\\w/])",
+  "g"
+);
+
+/**
+ * Wrap file paths in the HTML string with clickable anchors using event delegation.
+ * Must be called AFTER linkifyHtml() so URL links are already wrapped.
+ * Uses a data-path attribute so the click handler can read the raw path without
+ * having to parse the display text.
+ */
+function linkifyFilePaths(html: string): string {
+  // Reset lastIndex in case the regex is reused across calls
+  FILE_PATH_RE.lastIndex = 0;
+  return html.replace(FILE_PATH_RE, (path) => {
+    return `<a class="file-link" data-path="${path}" style="color:#89b4fa;text-decoration:underline;text-decoration-style:dotted;cursor:pointer">${path}</a>`;
+  });
+}
+
+// Box-drawing horizontal line characters (U+2500, U+2501, U+2504–U+250B, U+254C–U+254F, U+2550, U+2574–U+2577, etc.)
+// We match the most common ones used by terminal UIs: ─ ━ ═ ╌ ╍
+const BOX_HLINE_RE = /^[\u2500\u2501\u2504\u2505\u2508\u2509\u254C\u254D\u2550\u2574\u2576\u2578\u257A]+$/;
+
+/**
+ * Neutralize colors applied to pure horizontal box-drawing separator lines.
+ *
+ * Claude Code renders its agent-name pill separator (────────── [agent] ──────────)
+ * using foreground color rgb(220,38,38) (Tailwind red-600) for the ─ characters.
+ * These are structural chrome, not meaningful colored content. We replace the
+ * foreground color for such runs with a dim neutral so they don't bleed red into
+ * the terminal view.
+ *
+ * Strategy: for each text token (non-escape segment) that consists entirely of
+ * horizontal box-drawing chars, if the current foreground is a non-neutral color
+ * we override it with a dim gray during rendering.
+ */
+function isBoxHlineOnly(s: string): boolean {
+  const stripped = s.replace(/\s/g, "");
+  return stripped.length >= 3 && BOX_HLINE_RE.test(stripped);
+}
+
 export function ansiToHtml(text: string): string {
   let h = "", fg: string | null = null, bg: string | null = null;
   let b = 0, d = 0, i = 0, u = 0, s = 0, open = 0;
 
   for (const p of text.split(/(\x1b\[[0-9;]*m)/)) {
     const m = p.match(/^\x1b\[([0-9;]*)m$/);
-    if (!m) { h += esc(p); continue; }
+    if (!m) {
+      // Text token: check if it's a pure horizontal box-drawing separator line.
+      // If so, and we currently have a non-null fg color, temporarily suppress
+      // the open span and render these chars with a dim neutral color instead.
+      if (isBoxHlineOnly(p) && fg !== null) {
+        if (open) { h += "</span>"; open = 0; }
+        h += `<span style="color:#3a3a4a">${esc(p)}</span>`;
+        // Re-open the previous span state so subsequent tokens still get correct styling.
+        const st: string[] = [];
+        if (fg) st.push("color:" + fg);
+        if (bg) st.push("background:" + bg);
+        if (b) st.push("font-weight:bold");
+        if (d) st.push("opacity:0.6");
+        if (i) st.push("font-style:italic");
+        if (u || s) st.push("text-decoration:" + (u ? "underline" : "") + (u && s ? " " : "") + (s ? "line-through" : ""));
+        if (st.length) { h += `<span style="${st.join(";")}">`; open = 1; }
+      } else {
+        h += linkifyFilePaths(linkifyHtml(esc(p)));
+      }
+      continue;
+    }
     if (open) { h += "</span>"; open = 0; }
     const codes = m[1] ? m[1].split(";").map(Number) : [0];
     for (let j = 0; j < codes.length; j++) {

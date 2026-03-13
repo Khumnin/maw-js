@@ -13,6 +13,7 @@ interface MissionControlProps {
   sessions: Session[];
   agents: AgentState[];
   saiyanTargets: Set<string>;
+  blinkTargets: Set<string>;
   connected: boolean;
   send: (msg: object) => void;
   onSelectAgent: (agent: AgentState) => void;
@@ -24,7 +25,8 @@ export const MissionControl = memo(function MissionControl({
   sessions,
   agents,
   saiyanTargets,
-  connected,
+  blinkTargets,
+  connected: _connected,
   send,
   onSelectAgent,
   eventLog,
@@ -34,7 +36,7 @@ export const MissionControl = memo(function MissionControl({
   const [hoverPreview, setHoverPreview] = useState<{ agent: AgentState; room: { label: string; accent: string }; pos: { x: number; y: number } } | null>(null);
   const [pinnedPreview, setPinnedPreview] = useState<{ agent: AgentState; room: { label: string; accent: string }; pos: { x: number; y: number }; svgX: number; svgY: number } | null>(null);
   const pinnedByUser = useRef(false); // true = user clicked, false = auto-pinned by saiyan
-  const hoverTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [showSearch, setShowSearch] = useState(false);
 
@@ -366,7 +368,7 @@ export const MissionControl = memo(function MissionControl({
         {layout.map((s) => {
           const agentCount = s.agents.length;
           const clusterRadius = Math.max(70, 35 + agentCount * 18);
-          const hasBusy = s.agents.some((a) => a.status === "busy");
+          const hasBusy = s.agents.some((a) => a.status === "working" || a.status === "permission");
 
           return (
             <g key={s.session.name}>
@@ -441,6 +443,7 @@ export const MissionControl = memo(function MissionControl({
                         preview={agent.preview}
                         accent={s.style.accent}
                         saiyan={saiyanTargets.has(agent.target)}
+                        blink={blinkTargets.has(agent.target)}
                         onClick={() => onAgentClick(agent, ax, ay, { label: s.style.label, accent: s.style.accent })}
                       />
                     </g>

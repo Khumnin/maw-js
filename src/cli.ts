@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 process.env.MAW_CLI = "1";
 
-import { listSessions, findWindow, capture, sendKeys } from "./ssh";
+import { listSessions, findWindow, capture, sendKeys, killSession, killEntireSession } from "./services/ssh";
 
 const args = process.argv.slice(2);
 const cmd = args[0]?.toLowerCase();
@@ -45,6 +45,25 @@ async function cmdPeek(query?: string) {
   console.log(content);
 }
 
+async function cmdKill(target: string) {
+  // Accept either "session:window" or a window name to fuzzy-match
+  if (target.includes(":")) {
+    await killSession(target);
+    console.log(`\x1b[31mkilled\x1b[0m window → ${target}`);
+  } else {
+    const sessions = await listSessions();
+    const resolved = findWindow(sessions, target);
+    if (!resolved) { console.error(`window not found: ${target}`); process.exit(1); }
+    await killSession(resolved);
+    console.log(`\x1b[31mkilled\x1b[0m window → ${resolved}`);
+  }
+}
+
+async function cmdKillSession(sessionName: string) {
+  await killEntireSession(sessionName);
+  console.log(`\x1b[31mkilled\x1b[0m session → ${sessionName}`);
+}
+
 async function cmdSend(query: string, message: string) {
   const sessions = await listSessions();
   const target = findWindow(sessions, query);
@@ -60,6 +79,8 @@ function usage() {
   maw ls                      List sessions + windows
   maw peek [agent]            Peek agent screen (or all)
   maw hey <agent> <msg...>    Send message to agent
+  maw kill <target>           Kill a tmux window (target = session:window or name)
+  maw kill-session <name>     Kill an entire tmux session
   maw <agent> <msg...>        Shorthand for hey
   maw <agent>                 Shorthand for peek
   maw serve [port]            Start web UI (default: 3456)
@@ -74,6 +95,9 @@ function usage() {
   maw hey neo what is your status
   maw neo /recap
   maw peek mother
+  maw kill neo
+  maw kill myproject:1
+  maw kill-session myproject
   maw serve 8080`);
 }
 
@@ -88,6 +112,12 @@ if (!cmd || cmd === "--help" || cmd === "-h") {
 } else if (cmd === "hey" || cmd === "send") {
   if (!args[1] || !args[2]) { console.error("usage: maw hey <agent> <message>"); process.exit(1); }
   await cmdSend(args[1], args.slice(2).join(" "));
+} else if (cmd === "kill") {
+  if (!args[1]) { console.error("usage: maw kill <target>"); process.exit(1); }
+  await cmdKill(args[1]);
+} else if (cmd === "kill-session") {
+  if (!args[1]) { console.error("usage: maw kill-session <name>"); process.exit(1); }
+  await cmdKillSession(args[1]);
 } else if (cmd === "serve") {
   const { startServer } = await import("./server");
   startServer(args[1] ? +args[1] : 3456);

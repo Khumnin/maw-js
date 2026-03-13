@@ -89,4 +89,49 @@ describe("ansiToHtml", () => {
     expect(html).toContain("font-weight:bold");
     expect(html).toContain("color:#f38ba8");
   });
+
+  test("neutralizes red color on pure horizontal box-drawing separator lines", () => {
+    // Claude Code renders agent separator lines with rgb(220,38,38) foreground.
+    // The box-drawing chars themselves must be rendered with the dim neutral color,
+    // not the original red. The re-opened surrounding spans may still reference
+    // the original color but contain no visible box-drawing text.
+    const redFg = "\x1b[38;2;220;38;38m";
+    const reset = "\x1b[39m";
+    const separatorLine = "─".repeat(40);
+    const html = ansiToHtml(`${redFg}${separatorLine}${reset}`);
+    // The neutralized span must be present with the dim color
+    expect(html).toContain(`style="color:#3a3a4a"`);
+    // The separator chars must appear inside the dim span, not inside a red span
+    expect(html).toContain(`color:#3a3a4a">────`);
+    expect(html).toContain("─");
+  });
+
+  test("does not neutralize color on non-separator text that happens to be colored", () => {
+    const redFg = "\x1b[38;2;220;38;38m";
+    const reset = "\x1b[0m";
+    const html = ansiToHtml(`${redFg}error message${reset}`);
+    expect(html).toContain("rgb(220,38,38)");
+    expect(html).toContain("error message");
+  });
+
+  test("does not neutralize box-drawing chars with no foreground color set", () => {
+    // No color applied — should pass through unchanged (no override span)
+    const html = ansiToHtml("─".repeat(20));
+    expect(html).not.toContain("#3a3a4a");
+    expect(html).toContain("─");
+  });
+
+  test("restores previous color state after a neutralized separator", () => {
+    // After the separator, the remaining text should still be colored red
+    const redFg = "\x1b[38;2;220;38;38m";
+    const bgReset = "\x1b[49m";
+    const separator = "─".repeat(10);
+    const moreLines = "──";
+    const html = ansiToHtml(`${redFg}${separator}${bgReset}${moreLines}`);
+    // The long separator should be dim
+    expect(html).toContain("#3a3a4a");
+    // The trailing short run (2 chars — below the 3-char threshold for isBoxHlineOnly) passes through
+    // as the restored red state, OR may also be neutralized if >= 3 chars — in this test it's 2, so not neutralized
+    expect(html).toContain(moreLines);
+  });
 });

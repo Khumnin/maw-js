@@ -6,7 +6,11 @@ import { StatusBar } from "./components/StatusBar";
 import { RoomGrid } from "./components/RoomGrid";
 import { TerminalModal } from "./components/TerminalModal";
 import { MissionControl } from "./components/MissionControl";
+import { TokenUsage } from "./components/TokenUsage";
 import { ShortcutOverlay } from "./components/ShortcutOverlay";
+import { CommandCenter } from "./components/CommandCenter";
+import { TerminalPage } from "./components/TerminalPage";
+import { GlobalNotificationProvider } from "./components/GlobalNotificationProvider";
 import { unlockAudio, isAudioUnlocked } from "./lib/sounds";
 import type { AgentState } from "./lib/types";
 
@@ -49,18 +53,35 @@ export function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   // "?" key opens shortcut overlay (only when no input is focused)
+  // Cmd+Shift+K navigates to /#command (no longer toggles overlay)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "?" && !(e.target instanceof HTMLInputElement)) {
         setShowShortcuts(true);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "K") {
+        e.preventDefault();
+        window.location.hash = "command";
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const { sessions, agents, saiyanTargets, eventLog, addEvent, handleMessage } = useSessions();
-  const { connected, send } = useWebSocket(handleMessage);
+  // Forward all WS messages to CommandCenter via custom event
+  const handleMessage = useCallback((data: any) => {
+    window.dispatchEvent(new CustomEvent("maw-ws-message", { detail: data }));
+    return data;
+  }, []);
+
+  const { sessions, agents, saiyanTargets, blinkTargets, eventLog, addEvent, handleMessage: handleSessionMessage } = useSessions();
+
+  const combinedHandleMessage = useCallback((data: any) => {
+    handleMessage(data);
+    handleSessionMessage(data);
+  }, [handleMessage, handleSessionMessage]);
+
+  const { connected, send } = useWebSocket(combinedHandleMessage);
 
   const onSelectAgent = useCallback((agent: AgentState) => {
     setSelectedAgent(agent);
@@ -92,9 +113,42 @@ export function App() {
     />
   );
 
+  // Global notification overlay — mounted on every route, always active.
+  const globalNotifications = <GlobalNotificationProvider agents={agents} />;
+
+  // ── Command Center: full-page route /#command ──────────────────────────────
+
+  if (route === "command") {
+    const handleOpenTerminal = (agentTarget: string) => {
+      const agent = agents.find((a) => a.target === agentTarget);
+      if (agent) {
+        setSelectedAgent(agent);
+        send({ type: "select", target: agent.target });
+      }
+    };
+
+    return (
+      <div className="relative min-h-screen" style={{ background: "#020208" }}>
+        {globalNotifications}
+        <div className="relative z-10">
+          <StatusBar
+            connected={connected}
+            agentCount={agents.length}
+            sessionCount={sessions.length}
+            activeView="command"
+          />
+          <CommandCenter send={send} onOpenTerminal={handleOpenTerminal} />
+        </div>
+        {terminalModal}
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+      </div>
+    );
+  }
+
   if (route === "mission") {
     return (
       <div className="relative min-h-screen" style={{ background: "#020208" }}>
+        {globalNotifications}
         <div className="relative z-10">
           <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="mission" />
         </div>
@@ -102,6 +156,7 @@ export function App() {
           sessions={sessions}
           agents={agents}
           saiyanTargets={saiyanTargets}
+          blinkTargets={blinkTargets}
           connected={connected}
           send={send}
           onSelectAgent={onSelectAgent}
@@ -114,8 +169,35 @@ export function App() {
     );
   }
 
+  if (route === "tokens") {
+    return (
+      <div className="relative min-h-screen" style={{ background: "#020208" }}>
+        {globalNotifications}
+        <div className="relative z-10">
+          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="tokens" />
+          <div className="relative z-10 overflow-y-auto" style={{ height: "calc(100dvh - 80px)" }}>
+            <TokenUsage sessions={sessions} />
+          </div>
+        </div>
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+      </div>
+    );
+  }
+
+  if (route === "terminal") {
+    return (
+      <div className="flex flex-col h-dvh" style={{ background: "#020208" }}>
+        {globalNotifications}
+        <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="terminal" flush />
+        <TerminalPage sessions={sessions} agents={agents} send={send} />
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen">
+      {globalNotifications}
       <UniverseBg />
       <div className="relative z-10">
         <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="office" />

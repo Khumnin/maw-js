@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    // Bun runtime target
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+
+    // Strict mode — enables all strict checks:
+    // noImplicitAny, strictNullChecks, strictFunctionTypes,
+    // strictBindCallApply, strictPropertyInitialization,
+    // noImplicitThis, alwaysStrict, useUnknownInCatchVariables
+    "strict": true,
+
+    // Module interop
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    // Output — type-check only, no emit (Bun handles transpilation)
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    // Bun global types
+    "types": ["@types/bun"]
+  },
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist-office", "office"]
+}

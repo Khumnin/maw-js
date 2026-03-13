@@ -18,15 +18,19 @@ interface HoverPreviewCardProps {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  busy: "#fdd835",
-  ready: "#4caf50",
-  idle: "#666",
+  working:    "#22c55e",
+  waiting:    "#eab308",
+  permission: "#f97316",
+  error:      "#ef4444",
+  idle:       "#6b7280",
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  busy: "BUSY",
-  ready: "READY",
-  idle: "IDLE",
+  working:    "WORKING",
+  waiting:    "WAITING",
+  permission: "PERMISSION",
+  error:      "ERROR",
+  idle:       "IDLE",
 };
 
 function trimCapture(raw: string): string {
@@ -86,13 +90,25 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
   const streamingRef = useRef(false);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose?.(); return; }
+    // Ctrl+Escape closes the card; plain Escape sends \x1b to the tmux agent
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.ctrlKey) { onClose?.(); return; }
+      if (send) send({ type: "send", target: agent.target, text: "\x1b" });
+      return;
+    }
     // F11 or Cmd+Enter for fullscreen
     if (e.key === "F11" || (e.key === "Enter" && (e.metaKey || e.ctrlKey))) {
       e.preventDefault();
       onFullscreen?.();
       return;
     }
+    // Arrow keys → send escape sequences to tmux
+    if (e.key === "ArrowUp") { e.preventDefault(); send?.({ type: "send", target: agent.target, text: "\x1b[A" }); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); send?.({ type: "send", target: agent.target, text: "\x1b[B" }); return; }
+    if (e.key === "ArrowLeft") { e.preventDefault(); send?.({ type: "send", target: agent.target, text: "\x1b[D" }); return; }
+    if (e.key === "ArrowRight") { e.preventDefault(); send?.({ type: "send", target: agent.target, text: "\x1b[C" }); return; }
     if (e.key === "Enter") {
       e.preventDefault();
       if (streamingRef.current) {
@@ -103,6 +119,9 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
       } else if (inputBuf && send) {
         addEvent?.(agent.target, "command", inputBuf);
         send({ type: "send", target: agent.target, text: inputBuf });
+      } else if (send) {
+        // Empty buffer: send bare carriage return so tmux prompts (y/n, etc.) can be confirmed
+        send({ type: "send", target: agent.target, text: "\r" });
       }
       setInputBuf("");
       prevInputRef.current = "";
@@ -114,6 +133,27 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
       return; // let default input handling remove the char
     }
   }, [inputBuf, agent.target, send, onClose, onFullscreen]);
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const items = Array.from(e.clipboardData.items);
+    const imageItem = items.find((item) => item.type.startsWith("image/"));
+    if (imageItem) {
+      const blob = imageItem.getAsFile();
+      if (blob) {
+        try {
+          const fd = new FormData();
+          fd.append("image", blob, "paste.png");
+          const res = await fetch("/api/upload", { method: "POST", body: fd });
+          const data = await res.json() as { path?: string; error?: string };
+          if (data.path) setInputBuf(inputBuf + data.path);
+        } catch {}
+      }
+      return;
+    }
+    const text = e.clipboardData.getData("text");
+    if (text) setInputBuf(inputBuf + text);
+  }, []);
 
   // Track previous input value with ref (avoids stale closure)
   const prevInputRef = useRef("");
@@ -153,7 +193,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
     let active = true;
     async function poll() {
       try {
-        const res = await fetch(`/api/capture?target=${encodeURIComponent(agent.target)}`);
+        const res = await fetch(`/api/capture?target=${encodeURIComponent(agent.target)}&lines=${pinned ? 500 : 80}`);
         const data = await res.json();
         if (active) setContent(data.content || "");
       } catch {}
@@ -203,7 +243,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
         {/* Big chibi SVG avatar */}
         <svg width={100} height={90} viewBox="-40 -45 80 80">
           {/* Aura */}
-          {agent.status === "busy" && (
+          {agent.status === "working" && (
             <>
               <circle cx={0} cy={-6} r={36} fill={statusColor} opacity={0.08}
                 style={{ animation: "saiyan-aura 2s ease-in-out infinite" }} />
@@ -211,14 +251,14 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
                 opacity={0.15} style={{ animation: "saiyan-outer 2s ease-in-out infinite" }} />
             </>
           )}
-          {agent.status === "ready" && (
+          {(agent.status === "waiting" || agent.status === "permission") && (
             <circle cx={0} cy={-6} r={28} fill={statusColor} opacity={0.08} />
           )}
 
           {/* Ground shadow */}
           <ellipse cx={0} cy={24} rx={16} ry={4}
-            fill={agent.status === "idle" ? "#333" : statusColor}
-            opacity={agent.status === "idle" ? 0.3 : 0.2} />
+            fill={agent.status === "idle" || agent.status === "error" ? "#333" : statusColor}
+            opacity={agent.status === "idle" || agent.status === "error" ? 0.3 : 0.2} />
 
           {/* Body */}
           <rect x={-12} y={6} width={24} height={18} rx={8}
@@ -281,7 +321,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
           <ellipse cx={12} cy={-7} rx={3} ry={2} fill="#ff9999" opacity={0.25} />
 
           {/* Mouth */}
-          {agent.status === "busy" ? (
+          {agent.status === "working" ? (
             <ellipse cx={0} cy={-4} rx={2.5} ry={2} fill="#333" />
           ) : (
             <path d="M -3 -5 Q 0 -2 3 -5" fill="none" stroke="#333" strokeWidth={1.2} strokeLinecap="round" />
@@ -295,7 +335,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
           <circle cx={-13} cy={-1} r={1.5} fill="#666" />
 
           {/* Arms */}
-          {agent.status === "busy" ? (
+          {agent.status === "working" ? (
             <>
               <g style={{ animation: "typing-arm 0.25s ease-in-out infinite" }}>
                 <line x1={-12} y1={10} x2={-22} y2={18} stroke={color} strokeWidth={3} strokeLinecap="round" />
@@ -332,7 +372,13 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
               className="w-2 h-2 rounded-full"
               style={{
                 background: statusColor,
-                boxShadow: agent.status !== "idle" ? `0 0 6px ${statusColor}` : undefined,
+                boxShadow: agent.status !== "idle" && agent.status !== "error" ? `0 0 6px ${statusColor}` : undefined,
+                animation:
+                  agent.status === "permission"
+                    ? "permission-pulse 1s ease-in-out infinite"
+                    : agent.status === "working"
+                    ? "status-blink 1s ease-in-out infinite"
+                    : undefined,
               }}
             />
             <span className="text-[10px] font-mono" style={{ color: statusColor }}>
@@ -410,7 +456,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
       <div className="relative flex-1" style={{ background: "#08080c" }}>
         <div
           ref={termRef}
-          className="absolute inset-0 px-3 py-2 overflow-y-auto font-mono text-[10px] leading-[1.4] text-[#cdd6f4] whitespace-pre-wrap break-all"
+          className="absolute inset-0 px-3 py-2 overflow-y-auto overflow-x-auto font-mono text-[10px] leading-[1.4] text-[#cdd6f4] whitespace-pre"
           dangerouslySetInnerHTML={{ __html: ansiToHtml(trimCapture(content)) }}
         />
         {pinned && send && (
@@ -448,6 +494,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
             value={inputBuf}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             className="flex-1 bg-transparent text-white/90 outline-none caret-cyan-400 font-mono text-xs [&::-webkit-search-cancel-button]:hidden [&::-webkit-clear-button]:hidden [&::-ms-clear]:hidden"
             style={{ caretColor: "#22d3ee", WebkitAppearance: "none" }}
             inputMode="text"
@@ -512,7 +559,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
         <div className="flex items-center justify-center gap-3 px-3 py-1.5 bg-[#08080c] border-t border-white/[0.04] font-mono text-[8px] text-white/20">
           <span><kbd className="text-white/30">Enter</kbd> send</span>
           <span><kbd className="text-white/30">⌃Enter</kbd> fullscreen</span>
-          <span><kbd className="text-white/30">Esc</kbd> close</span>
+          <span><kbd className="text-white/30">⌃Esc</kbd> close</span>
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {

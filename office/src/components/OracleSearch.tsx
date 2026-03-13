@@ -18,6 +18,7 @@ interface SearchResponse {
   mode?: string;
   model?: string;
   warning?: string;
+  error?: string;
 }
 
 interface Trace {
