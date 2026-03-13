@@ -82,7 +82,7 @@ export function DirectoryBrowser({ initialPath = "", onSelect, onCancel }: Direc
     >
       {/* Path bar */}
       <div
-        className="flex items-center gap-2 px-3 py-2 border-b shrink-0"
+        className="flex items-center gap-2 px-3 py-2 border-b shrink-0 overflow-hidden min-w-0"
         style={{ borderColor: "var(--color-border-default)" }}
       >
         <button

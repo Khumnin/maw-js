@@ -118,13 +118,13 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="dialog-panel overflow-y-auto"
+        className="dialog-panel overflow-hidden flex flex-col p-0"
         style={{
           background: "var(--color-bg-surface)",
           borderColor: "var(--color-border-strong)",
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="px-6 pt-6 pb-0 shrink-0">
           <DialogTitle
             className="text-[15px] font-semibold"
             style={{ color: "var(--color-text-primary)" }}
@@ -133,7 +133,7 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 overflow-y-auto px-6 pt-4 pb-6 min-h-0">
           {/* Session name */}
           <div className="flex flex-col gap-1.5">
             <label

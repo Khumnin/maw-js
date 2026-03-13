@@ -55,19 +55,23 @@ export function AgentDefPicker({ value, onChange }: AgentDefPickerProps) {
 
   return (
     <Select value={value} onValueChange={onChange} disabled={loading || definitions.length === 0}>
-      <SelectTrigger className="w-full text-[12px] h-9">
-        <SelectValue
-          placeholder={loading ? "Loading…" : definitions.length === 0 ? "No definitions found" : "Select agent definition"}
-        />
+      <SelectTrigger className="w-full min-w-0 text-[12px] h-9 overflow-hidden">
+        {/* Constrain the value span so long names truncate instead of expanding the trigger */}
+        <span className="flex-1 min-w-0 overflow-hidden">
+          <SelectValue
+            placeholder={loading ? "Loading…" : definitions.length === 0 ? "No definitions found" : "Select agent definition"}
+            className="block truncate"
+          />
+        </span>
       </SelectTrigger>
       <SelectContent>
         {definitions.map((def) => (
           <SelectItem key={def.file} value={def.name}>
-            <span className="flex flex-col gap-0.5">
-              <span className="text-[12px] font-medium">{def.name}</span>
+            <span className="flex flex-col gap-0.5 min-w-0 max-w-[360px]">
+              <span className="text-[12px] font-medium truncate">{def.name}</span>
               {def.description && (
                 <span
-                  className="text-[10px]"
+                  className="text-[10px] truncate"
                   style={{ color: "var(--color-text-muted)" }}
                 >
                   {def.description}
