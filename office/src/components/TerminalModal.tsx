@@ -129,12 +129,22 @@ export function TerminalModal({ agent, send, onClose, onNavigate, onSelectSiblin
   }, [agent.target]);
 
   // Track mouse selection state — pause DOM updates while selecting
-  const handleMouseDown = useCallback(() => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Don't interfere with link clicks
+    const target = e.target as HTMLElement;
+    if (target.closest("a")) return;
+
     if (selectionTimer.current) { clearTimeout(selectionTimer.current); selectionTimer.current = null; }
     isSelecting.current = true;
   }, []);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("a")) {
+      isSelecting.current = false;
+      return;
+    }
+
     const selection = window.getSelection();
     const hasSelection = selection && !selection.isCollapsed && selection.toString().trim();
 
@@ -296,6 +306,15 @@ export function TerminalModal({ agent, send, onClose, onNavigate, onSelectSiblin
             onMouseUp={handleMouseUp}
             onClick={(e: React.MouseEvent) => {
               const target = e.target as HTMLElement;
+
+              // Allow native <a> tag clicks (URLs) — let browser open in new tab
+              const anchor = target.closest("a");
+              if (anchor && anchor.href && !anchor.classList.contains("file-link")) {
+                // Don't interfere — browser will handle target="_blank" navigation
+                return;
+              }
+
+              // Handle file-link clicks (existing logic)
               const fileLink = target.closest(".file-link") as HTMLElement | null;
               if (fileLink) {
                 e.preventDefault();
