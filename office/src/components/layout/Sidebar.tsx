@@ -3,6 +3,7 @@ import { Plus, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { SidebarNav } from "./SidebarNav";
 import { SidebarFleetStatus } from "./SidebarFleetStatus";
 import { SpawnAgentDialog } from "@/components/agents/SpawnAgentDialog";
+import { ClockWidget } from "./ClockWidget";
 import { cn } from "@/lib/cn";
 import type { AgentState } from "@/lib/types";
 
@@ -206,6 +207,16 @@ export const Sidebar = memo(function Sidebar({
         </div>
 
         <SpawnAgentDialog open={spawnOpen} onOpenChange={setSpawnOpen} />
+
+        {/* ── Clock widget (desktop only, hidden when collapsed) ─────────────── */}
+        {!collapsed && (
+          <div
+            className="hidden md:block border-t"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <ClockWidget collapsed={collapsed} />
+          </div>
+        )}
 
         {/* ── Collapse toggle (desktop only) ────────────────────────────────── */}
         <div
