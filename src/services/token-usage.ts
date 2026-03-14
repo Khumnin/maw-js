@@ -160,6 +160,12 @@ interface RawSessionData {
   hourBuckets: Record<string, { inputTokens: number; outputTokens: number; cost: number }>;
   /** Each completed assistant turn: { timestamp (ms), model } */
   promptEvents: Array<{ tsMs: number; model: string; timestamp: string }>;
+  /**
+   * Agent name from the `agent-setting` JSONL entry — present when Claude Code
+   * was launched with `--agent <name>` (e.g. "orchestrator", "cloud-infra").
+   * `null` for direct/vanilla Claude Code sessions.
+   */
+  agentSetting: string | null;
 }
 
 async function parseJsonlFile(filePath: string): Promise<RawSessionData | null> {
@@ -177,6 +183,7 @@ async function parseJsonlFile(filePath: string): Promise<RawSessionData | null> 
     durationMs: 0,
     hourBuckets: {},
     promptEvents: [],
+    agentSetting: null,
   };
 
   try {
@@ -192,6 +199,11 @@ async function parseJsonlFile(filePath: string): Promise<RawSessionData | null> 
         entry = JSON.parse(line);
       } catch {
         continue; // skip malformed lines
+      }
+
+      // Agent attribution — baked in by Claude Code when launched with --agent <name>
+      if (entry.type === "agent-setting" && typeof entry.agentSetting === "string") {
+        data.agentSetting = entry.agentSetting;
       }
 
       // Assistant messages — token usage
@@ -749,9 +761,16 @@ async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLooku
       raw.cacheRead
     );
 
-    // Attribute to agent name via the 8-char session prefix
+    // Attribute to agent name:
+    // Priority 1 — `agent-setting` entry baked into the JSONL by Claude Code
+    //              when launched with --agent <name>. This is authoritative and
+    //              works for all historical sessions.
+    // Priority 2 — live tmux status-bar prefix (8-char hex), covers actively
+    //              running sessions that haven't written agent-setting yet
+    //              (e.g. vanilla sessions started without --agent).
     const prefix = sessionId.slice(0, 8);
-    const agentName: string | null = prefixToName.get(prefix) ?? null;
+    const agentName: string | null =
+      raw.agentSetting ?? prefixToName.get(prefix) ?? null;
 
     const existing = agentMap.get(agentName) ?? {
       estimatedCost: 0,
