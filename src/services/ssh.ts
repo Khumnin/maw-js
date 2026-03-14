@@ -82,6 +82,7 @@ export async function spawnAgent(
   }
   const safeDir = dir.replace(/'/g, "'\\''");
   await ssh(`tmux new-session -d -s '${name}' -c '${safeDir}' 2>/dev/null || true`, host);
+  await ssh(`tmux set-option -t '${name}' automatic-rename off 2>/dev/null`, host);
 
   // Give the shell ~400ms to initialize before sending anything
   await new Promise<void>((r) => setTimeout(r, 400));

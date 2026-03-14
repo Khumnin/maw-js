@@ -348,7 +348,7 @@ export function TaskSubmitForm({ agents }: TaskSubmitFormProps) {
                     value={a.target}
                     className="text-[11px] font-mono"
                   >
-                    {a.windowName}
+                    {a.sessionName || a.windowName}
                   </SelectItem>
                 ))
               )}

@@ -81,7 +81,7 @@ export function AgentDetailDrawer({ agent, open, onClose }: AgentDetailDrawerPro
                 className="text-[13px] font-semibold font-mono truncate"
                 style={{ color: "var(--color-text-primary)" }}
               >
-                {agent?.windowName ?? "Agent"}
+                {agent?.sessionName ?? "Agent"}
               </SheetTitle>
               <SheetDescription
                 className="text-[11px] font-mono mt-0.5 truncate"
