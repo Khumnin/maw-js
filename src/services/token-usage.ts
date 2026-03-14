@@ -11,7 +11,7 @@ import * as path from "node:path";
 import { capture } from "./ssh";
 import type { Session } from "./ssh";
 import { MAW_CLAUDE_DIR } from "../paths";
-import { getAllAgentProjects } from "../db/store";
+import { getAllAgentProjects, getAllAgentSettingProjects } from "../db/store";
 
 // ── Pricing (per million tokens) ─────────────────────────────────────────────
 
@@ -280,33 +280,66 @@ async function parseJsonlFile(filePath: string): Promise<RawSessionData | null> 
 interface ParsedFileResult {
   raw: RawSessionData;
   sessionId: string;
+  /** The encoded project directory name (e.g. "-Users-kanatekhumnin-Project-digital-worker") */
+  projectDir: string;
 }
 
 let parsedFilesCache: { results: ParsedFileResult[]; ts: number } | null = null;
 const PARSED_FILES_TTL_MS = 10_000;
 
+/**
+ * Discover all JSONL files across every project directory under ~/.claude/projects/.
+ * Each ParsedFileResult carries the encoded project directory name so the
+ * by-agent function can use it as a fallback project attribution signal.
+ */
 async function getAllParsedFiles(): Promise<ParsedFileResult[]> {
   const now = Date.now();
   if (parsedFilesCache && now - parsedFilesCache.ts < PARSED_FILES_TTL_MS) {
     return parsedFilesCache.results;
   }
 
-  let files: string[];
+  // Build the list of (filePath, projectDir) pairs to parse.
+  // Start with the primary JSONL_DIR (respects MAW_CLAUDE_PROJECTS_DIR override).
+  // Then also scan all sibling project directories under ~/.claude/projects/ so
+  // sessions from other working directories (digital-worker, maw-js, etc.) are included.
+  const filePairs: Array<{ filePath: string; projectDir: string }> = [];
+
+  const primaryDirName = path.basename(JSONL_DIR);
+
+  // Always include primary dir
   try {
     const entries = await readdir(JSONL_DIR);
-    files = entries
-      .filter((f) => f.endsWith(".jsonl"))
-      .map((f) => path.join(JSONL_DIR, f));
-  } catch {
-    files = [];
-  }
+    for (const f of entries) {
+      if (f.endsWith(".jsonl")) {
+        filePairs.push({ filePath: path.join(JSONL_DIR, f), projectDir: primaryDirName });
+      }
+    }
+  } catch { /* primary dir unreadable — continue */ }
+
+  // Scan sibling project dirs (the parent of JSONL_DIR is ~/.claude/projects/)
+  const projectsRoot = path.dirname(JSONL_DIR);
+  try {
+    const siblings = await readdir(projectsRoot, { withFileTypes: true });
+    for (const entry of siblings) {
+      if (!entry.isDirectory() || entry.name === primaryDirName) continue;
+      const sibDir = path.join(projectsRoot, entry.name);
+      try {
+        const sibEntries = await readdir(sibDir);
+        for (const f of sibEntries) {
+          if (f.endsWith(".jsonl")) {
+            filePairs.push({ filePath: path.join(sibDir, f), projectDir: entry.name });
+          }
+        }
+      } catch { /* skip unreadable sibling */ }
+    }
+  } catch { /* projects root unreadable */ }
 
   const results: ParsedFileResult[] = [];
-  for (const filePath of files) {
+  for (const { filePath, projectDir } of filePairs) {
     const sessionId = path.basename(filePath, ".jsonl");
     const raw = await parseJsonlFile(filePath);
     if (!raw) continue;
-    results.push({ raw, sessionId });
+    results.push({ raw, sessionId, projectDir });
   }
 
   parsedFilesCache = { results, ts: now };
@@ -664,10 +697,11 @@ const BY_AGENT_CACHE_TTL_MS = 10_000;
 // ── Project slug extraction ───────────────────────────────────────────────────
 
 /**
- * Derives a human-readable project name from a JSONL directory path.
+ * Derives a human-readable project name from a JSONL directory name.
  * Examples:
- *   ~/.claude/projects/-Users-alice-Project-maw-js  → "maw-js"
- *   ~/.claude/projects/-Users-alice-documents       → "documents"
+ *   -Users-alice-Project-maw-js        → "maw-js"
+ *   -Users-alice-Project-digital-worker → "digital-worker"
+ *   -Users-alice-documents             → "documents"
  */
 function projectSlugFromDir(dir: string): string {
   const base = path.basename(dir);
@@ -683,6 +717,22 @@ function projectSlugFromDir(dir: string): string {
   const last = parts[parts.length - 1];
   return last || "default";
 }
+
+/**
+ * Maps encoded project directory names to human-readable project labels.
+ * Covers sessions that were run without `--agent` in a specific subdirectory.
+ * Key: encoded dir name (path.basename of the ~/.claude/projects/ subdirectory).
+ * Value: project label shown in the cost breakdown.
+ */
+const DIR_PROJECT_LABELS: Record<string, string> = {
+  "-Users-kanatekhumnin-Project-digital-worker":   "Recruit Platform",
+  "-Users-kanatekhumnin-Project-maw-js":           "MAW Platform",
+  "-Users-kanatekhumnin-Project":                  "General",
+  "-Users-kanatekhumnin--claude-agents":           "Claude Agents",
+  "-Users-kanatekhumnin":                          "General",
+  "-Users-kanatekhumnin-platform":                 "Recruit Platform",
+  "-Users-kanatekhumnin-Library-CloudStorage-OneDrive-SharedLibraries-TigerSoftCo--Ltd-Purikorn-Dentham--Poom----1-Recruitment-AI-Project": "Recruit Platform",
+};
 
 // ── Public: GET /api/token-usage/by-agent ────────────────────────────────────
 
@@ -705,9 +755,11 @@ async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLooku
   // 3. Pull all parsed JSONL files from the shared 10s cache
   const parsed = await getAllParsedFiles();
 
-  // 4. Determine the fallback project slug for this JSONL directory
-  //    (Sprint 1: single project — all files share one directory)
-  const fallbackProjectSlug = projectSlugFromDir(JSONL_DIR);
+  // 4. Load all three attribution lookups from SQLite:
+  //    a) agentSetting → { projectLabel, displayName }  (new table)
+  //    b) sessionName  → projectLabel                   (existing table, for live tmux sessions)
+  //    c) directory    → projectLabel                   (static map, for bare `claude` sessions)
+  const settingProjects = getAllAgentSettingProjects();
 
   // Build a sessionName → projectLabel lookup.
   // Seed from persisted SQLite records first (covers closed/historical agents),
@@ -723,7 +775,7 @@ async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLooku
     }
   }
 
-  // 5. Aggregate: agentName → accumulated stats
+  // 5. Aggregate: agentDisplayName → accumulated stats
   const agentMap = new Map<string | null, {
     estimatedCost: number;
     inputTokens: number;
@@ -740,7 +792,7 @@ async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLooku
     sessionCount: number;
   }>();
 
-  for (const { raw, sessionId } of parsed) {
+  for (const { raw, sessionId, projectDir } of parsed) {
     // Apply time-range filter on lastSeen
     if (rangeStart !== null) {
       const sortedTs = raw.timestamps.slice().sort();
@@ -761,18 +813,39 @@ async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLooku
       raw.cacheRead
     );
 
-    // Attribute to agent name:
-    // Priority 1 — `agent-setting` entry baked into the JSONL by Claude Code
-    //              when launched with --agent <name>. This is authoritative and
-    //              works for all historical sessions.
-    // Priority 2 — live tmux status-bar prefix (8-char hex), covers actively
-    //              running sessions that haven't written agent-setting yet
-    //              (e.g. vanilla sessions started without --agent).
+    // Attribute to agent name + resolve display name and project label.
+    //
+    // Attribution priority (agent raw key):
+    //   P1 — `agent-setting` entry baked into the JSONL by Claude Code
+    //         when launched with --agent <name>. Authoritative for all historical
+    //         sessions that used an agent profile.
+    //   P2 — live tmux status-bar prefix (8-char hex), covers actively running
+    //         sessions that haven't written agent-setting yet.
+    //   P3 — null (bare `claude` sessions with no agent flag).
     const prefix = sessionId.slice(0, 8);
-    const agentName: string | null =
+    const rawAgentKey: string | null =
       raw.agentSetting ?? prefixToName.get(prefix) ?? null;
 
-    const existing = agentMap.get(agentName) ?? {
+    // Resolve display name:
+    //   If rawAgentKey is an agentSetting, use the displayName from the mapping.
+    //   If rawAgentKey is a tmux session name (no agentSetting), use it as-is.
+    //   If null, stay null.
+    let agentDisplayName: string | null = null;
+    let settingProjectLabel: string | null = null;
+
+    if (raw.agentSetting !== null) {
+      // P1: agentSetting path — look up display name and project label
+      const settingEntry = settingProjects.get(raw.agentSetting);
+      agentDisplayName   = settingEntry?.displayName ?? raw.agentSetting;
+      settingProjectLabel = settingEntry?.projectLabel ?? null;
+    } else if (rawAgentKey !== null) {
+      // P2: tmux session name — use as-is for display; project label from agent_projects
+      agentDisplayName    = rawAgentKey;
+      settingProjectLabel = agentProjectLabels.get(rawAgentKey) ?? null;
+    }
+    // P3: both stay null
+
+    const existing = agentMap.get(agentDisplayName) ?? {
       estimatedCost: 0,
       inputTokens: 0,
       outputTokens: 0,
@@ -782,18 +855,25 @@ async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLooku
       turnCount: 0,
     };
     existing.estimatedCost += sessionCost;
-    existing.inputTokens  += raw.inputTokens;
-    existing.outputTokens += raw.outputTokens;
+    existing.inputTokens   += raw.inputTokens;
+    existing.outputTokens  += raw.outputTokens;
     existing.cacheCreation += raw.cacheCreation;
-    existing.cacheRead    += raw.cacheRead;
-    existing.sessionCount += 1;
-    existing.turnCount    += raw.turnCount;
-    agentMap.set(agentName, existing);
+    existing.cacheRead     += raw.cacheRead;
+    existing.sessionCount  += 1;
+    existing.turnCount     += raw.turnCount;
+    agentMap.set(agentDisplayName, existing);
 
-    // Accumulate into project bucket — prefer the agent's manual projectLabel,
-    // fall back to the directory-derived slug.
-    const agentProjectLabel = agentName != null ? (agentProjectLabels.get(agentName) ?? null) : null;
-    const projectSlug = agentProjectLabel ?? fallbackProjectSlug;
+    // Resolve project label in priority order:
+    //   1. agentSetting → project label  (settingProjectLabel, from new table)
+    //   2. sessionName  → project label  (agentProjectLabels, for tmux sessions)
+    //   3. directory    → project label  (DIR_PROJECT_LABELS, for bare `claude` sessions)
+    //   4. directory slug extracted by heuristic (last segment after "Project-")
+    const dirLabel = DIR_PROJECT_LABELS[projectDir];
+    const projectSlug =
+      settingProjectLabel ??
+      dirLabel ??
+      projectSlugFromDir(projectDir);
+
     const projExisting = projectMap.get(projectSlug) ?? { estimatedCost: 0, sessionCount: 0 };
     projExisting.estimatedCost += sessionCost;
     projExisting.sessionCount  += 1;

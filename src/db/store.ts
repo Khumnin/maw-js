@@ -80,6 +80,15 @@ export function initDb(): void {
       updated_at    INTEGER NOT NULL DEFAULT (unixepoch())
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS agent_setting_projects (
+      agent_setting TEXT    PRIMARY KEY,
+      project_label TEXT    NOT NULL,
+      display_name  TEXT,
+      updated_at    INTEGER NOT NULL DEFAULT (unixepoch())
+    )
+  `);
 }
 
 // ── Message type ──────────────────────────────────────────────────────────────
@@ -494,4 +503,49 @@ export function removeAgentProject(sessionName: string): void {
   const db = getDb();
   const stmt = db.prepare("DELETE FROM agent_projects WHERE session_name = $session_name");
   stmt.run({ $session_name: sessionName });
+}
+
+// ── Agent Setting → Project Labels ────────────────────────────────────────────
+
+export interface AgentSettingProject {
+  agentSetting: string;
+  projectLabel: string;
+  displayName: string | null;
+}
+
+export function setAgentSettingProject(
+  agentSetting: string,
+  projectLabel: string,
+  displayName?: string,
+): void {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO agent_setting_projects (agent_setting, project_label, display_name, updated_at)
+    VALUES ($agent_setting, $project_label, $display_name, unixepoch())
+    ON CONFLICT(agent_setting) DO UPDATE SET
+      project_label = excluded.project_label,
+      display_name  = excluded.display_name,
+      updated_at    = excluded.updated_at
+  `);
+  stmt.run({
+    $agent_setting: agentSetting,
+    $project_label: projectLabel,
+    $display_name:  displayName ?? null,
+  });
+}
+
+/**
+ * Returns a Map from agent_setting → { projectLabel, displayName }.
+ * Used in token-usage attribution to bridge JSONL agentSetting values
+ * to human-readable project labels and display names.
+ */
+export function getAllAgentSettingProjects(): Map<string, { projectLabel: string; displayName: string | null }> {
+  const db = getDb();
+  const stmt = db.prepare("SELECT agent_setting, project_label, display_name FROM agent_setting_projects");
+  const rows = stmt.all({}) as { agent_setting: string; project_label: string; display_name: string | null }[];
+  const map = new Map<string, { projectLabel: string; displayName: string | null }>();
+  for (const row of rows) {
+    map.set(row.agent_setting, { projectLabel: row.project_label, displayName: row.display_name });
+  }
+  return map;
 }
