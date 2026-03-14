@@ -55,7 +55,8 @@ interface TokenUsageResponse {
 
 interface RealtimeSession {
   sessionName: string;
-  sessionPrefix: string;
+  /** null when no session:xxxxxxxx could be parsed from the status bar */
+  sessionPrefix: string | null;
   model: string;
   contextPercent: number | null;
   streamingTokens: number | null;
@@ -863,10 +864,12 @@ export const TokenUsage = memo(function TokenUsage({ sessions }: TokenUsageProps
     };
   }, [fetchUsage, fetchRealtime, fetchLimits]);
 
-  // Map realtime sessions by prefix
+  // Map realtime sessions by prefix (skip entries where prefix could not be parsed)
   const realtimeByPrefix: Record<string, RealtimeSession> = {};
   for (const r of realtime) {
-    realtimeByPrefix[r.sessionPrefix] = r;
+    if (r.sessionPrefix !== null) {
+      realtimeByPrefix[r.sessionPrefix] = r;
+    }
   }
 
   if (loading) {

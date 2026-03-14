@@ -678,11 +678,16 @@ async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLooku
   // 1. Resolve the time-range cutoff
   const rangeStart = rangeStartDate(range);
 
-  // 2. Get the live prefix → session-name map from realtime tmux state
+  // 2. Get the live prefix → session-name map from realtime tmux state.
+  //    Only include sessions where we successfully parsed a real session prefix
+  //    from the Claude Code status bar; skip entries with null prefix to avoid
+  //    false attributions from stale or idle panes.
   const realtimeSessions = await getRealtimeSessions();
   const prefixToName = new Map<string, string>();
   for (const s of realtimeSessions) {
-    prefixToName.set(s.sessionPrefix, s.sessionName);
+    if (s.sessionPrefix !== null) {
+      prefixToName.set(s.sessionPrefix, s.sessionName);
+    }
   }
 
   // 3. Pull all parsed JSONL files from the shared 10s cache
@@ -833,7 +838,11 @@ export async function getTokenUsageByAgent(range: TimeRange, agentLookup?: Agent
 
 export interface RealtimeSession {
   sessionName: string;
-  sessionPrefix: string;
+  /** 8-char hex prefix parsed from the Claude Code status bar (`session:xxxxxxxx`).
+   *  `null` when no session identifier could be extracted from the terminal —
+   *  this session is excluded from the prefix→name attribution map so it never
+   *  creates false matches against JSONL UUIDs. */
+  sessionPrefix: string | null;
   model: string;
   contextPercent: number | null;
   streamingTokens: number | null;
@@ -865,7 +874,9 @@ export async function getRealtimeSessions(): Promise<RealtimeSession[]> {
 
     // Parse status bar patterns
     const ctxMatch = text.match(/ctx:(\d+)%/);
-    const sessionMatch = text.match(/session:([a-f0-9]{8})/);
+    // Match the full 8-char hex session prefix from Claude Code status bar.
+    // Also accept a shorter prefix (4–7 chars) in case the terminal truncates.
+    const sessionMatch = text.match(/session:([a-f0-9]{4,8})/);
     const streamMatch = text.match(/↓\s*([\d.]+)k?\s*tokens/i);
 
     // Model extraction — common patterns in Claude Code status bar
@@ -873,7 +884,11 @@ export async function getRealtimeSessions(): Promise<RealtimeSession[]> {
     const modelMatch = text.match(/claude-(?:opus|sonnet|haiku)[\w.-]*/i);
     if (modelMatch) model = modelMatch[0].toLowerCase();
 
-    const sessionPrefix = sessionMatch?.[1] || session.name.slice(0, 8);
+    // Only use the prefix when we actually parsed it from the status bar.
+    // NEVER fall back to session.name.slice(0, 8) — that produces nonsense
+    // like "Applican" which can accidentally match JSONL UUID prefixes and
+    // misattribute costs to the wrong agent.
+    const sessionPrefix: string | null = sessionMatch?.[1] ?? null;
 
     results.push({
       sessionName: session.name,
