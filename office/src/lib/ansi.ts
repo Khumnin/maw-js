@@ -139,7 +139,14 @@ function rejoinWrappedUrls(text: string): string {
     `([^\\s\\n])`,
     "g"
   );
-  return text.replace(re, "$1$2");
+  // Loop: a URL wrapping across 3+ lines needs multiple passes — each pass
+  // rejoins one newline, extending the URL so the next pass can catch the next.
+  let prev: string;
+  do {
+    prev = text;
+    text = text.replace(re, "$1$2");
+  } while (text !== prev);
+  return text;
 }
 
 export function ansiToHtml(text: string): string {
