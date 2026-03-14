@@ -132,8 +132,9 @@ function rejoinWrappedUrls(text: string): string {
   const re = new RegExp(
     // URL fragment ending with a URL-safe character (letter, digit, or /_=-)
     `(https?://[^\\s]*[a-zA-Z0-9/_=-])` +
-    // Optional ANSI codes before the newline, the newline itself, optional ANSI after
-    `${ansi}\\n${ansi}` +
+    // Optional trailing spaces (tmux pads lines to terminal width), optional ANSI
+    // codes before the newline, the newline itself, optional ANSI after
+    `[ ]*${ansi}\\n${ansi}` +
     // Non-whitespace/non-newline character that continues the URL
     `([^\\s\\n])`,
     "g"
