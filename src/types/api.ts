@@ -78,11 +78,12 @@ export const WorkerActionSchema = z.object({
 export type WorkerActionInput = z.infer<typeof WorkerActionSchema>;
 
 export const SpawnAgentSchema = z.object({
-  name:          z.string().min(1, "name required"),
-  workDir:       z.string().optional(),
-  initialPrompt: z.string().optional(),
-  agentName:     z.string().optional(),
-  project:       z.string().max(64).optional(),
+  name:            z.string().min(1, "name required").regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$/, "invalid session name"),
+  workDir:         z.string().optional(),
+  initialPrompt:   z.string().optional(),
+  agentName:       z.string().regex(/^[a-zA-Z0-9._-]+$/, "agentName contains invalid characters").optional(),
+  project:         z.string().max(64).optional(),
+  skipPermissions: z.boolean().default(false),
 });
 
 export const SetProjectSchema = z.object({

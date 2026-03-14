@@ -71,6 +71,7 @@ export async function spawnAgent(
   initialPrompt?: string,
   host?: string,
   agentName?: string,
+  skipPermissions?: boolean,
 ): Promise<void> {
   // Create new detached tmux session
   // Replace leading ~ with $HOME so the shell expands it — tmux -c does not
@@ -79,13 +80,20 @@ export async function spawnAgent(
   if (dir.startsWith("~")) {
     dir = "$HOME" + dir.slice(1);
   }
-  await ssh(`tmux new-session -d -s '${name}' -c '${dir}' 2>/dev/null || true`, host);
+  const safeDir = dir.replace(/'/g, "'\\''");
+  await ssh(`tmux new-session -d -s '${name}' -c '${safeDir}' 2>/dev/null || true`, host);
 
   // Give the shell ~400ms to initialize before sending anything
   await new Promise<void>((r) => setTimeout(r, 400));
 
-  // Start Claude Code — with or without --agent flag
-  const claudeCmd = agentName ? `claude --agent ${agentName}` : "claude";
+  // Start Claude Code — build flags list
+  const flags: string[] = [];
+  if (agentName) {
+    const safeAgent = agentName.replace(/'/g, "'\\''");
+    flags.push(`--agent '${safeAgent}'`);
+  }
+  if (skipPermissions) flags.push("--dangerously-skip-permissions");
+  const claudeCmd = `claude ${flags.join(" ")}`.trim();
   await ssh(`tmux send-keys -t '${name}' '${claudeCmd}' Enter`, host);
 
   // If an initial prompt was provided, wait for Claude to start (1.5s) then send it

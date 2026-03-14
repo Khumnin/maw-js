@@ -200,9 +200,9 @@ app.post(
       const issue = parsed.error.issues[0];
       return c.json({ error: issue?.message ?? "invalid request" }, 400);
     }
-    const { name, workDir, initialPrompt, agentName } = parsed.data;
+    const { name, workDir, initialPrompt, agentName, skipPermissions } = parsed.data;
     const project = parsed.data.project?.trim() || null;
-    await spawnAgent(name, workDir, initialPrompt, undefined, agentName);
+    await spawnAgent(name, workDir, initialPrompt, undefined, agentName, skipPermissions);
     if (project) {
       tracker.setSpawnProjectLabel(name, project);
     }

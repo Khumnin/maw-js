@@ -26,6 +26,7 @@ interface SpawnPayload {
   project?: string;
   agentName?: string;
   initialPrompt?: string;
+  skipPermissions?: boolean;
 }
 
 interface FieldErrors {
@@ -52,6 +53,7 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
   const [project, setProject] = useState("");
   const [agentName, setAgentName] = useState("");
   const [initialPrompt, setInitialPrompt] = useState("");
+  const [skipPermissions, setSkipPermissions] = useState(false);
   const [showBrowser, setShowBrowser] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -90,6 +92,7 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
       if (project.trim()) payload.project = project.trim();
       if (agentName) payload.agentName = agentName;
       if (initialPrompt.trim()) payload.initialPrompt = initialPrompt.trim();
+      if (skipPermissions) payload.skipPermissions = true;
 
       const res = await fetch("/api/agents/spawn", {
         method: "POST",
@@ -118,6 +121,7 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
     setProject("");
     setAgentName("");
     setInitialPrompt("");
+    setSkipPermissions(false);
     setShowBrowser(false);
     setFieldErrors({});
     onOpenChange(false);
@@ -303,6 +307,47 @@ export function SpawnAgentDialog({ open, onOpenChange }: SpawnAgentDialogProps) 
               value={agentName}
               onChange={setAgentName}
             />
+          </div>
+
+          {/* Skip permission requests */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="spawn-skip-permissions" className="flex items-start gap-3 cursor-pointer select-none">
+              <div className="relative mt-0.5 shrink-0">
+                <input
+                  id="spawn-skip-permissions"
+                  type="checkbox"
+                  checked={skipPermissions}
+                  onChange={(e) => setSkipPermissions(e.target.checked)}
+                  className="sr-only"
+                />
+                <div
+                  className={cn(
+                    "w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                    skipPermissions
+                      ? "border-amber-500 bg-amber-500/20"
+                      : "border-white/20 bg-transparent hover:border-white/40"
+                  )}
+                  aria-hidden="true"
+                >
+                  {skipPermissions && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="text-amber-400">
+                      <path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span
+                  className="text-[12px] font-medium leading-tight"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  Skip permission requests
+                </span>
+                <span className="text-[11px] leading-snug" style={{ color: "rgb(252 211 77)" }}>
+                  Allows all tool use without confirmation — use with trusted prompts only
+                </span>
+              </div>
+            </label>
           </div>
 
           {/* Initial prompt */}
