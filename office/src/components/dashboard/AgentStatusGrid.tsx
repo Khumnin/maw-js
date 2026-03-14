@@ -70,7 +70,7 @@ export function AgentStatusGrid({ agents, onSelectAgent, onShowDetails }: AgentS
           // Bridge TrackedAgent → AgentState for the TerminalModal callback
           const agentState: AgentState = {
             target: agent.target,
-            name: agent.sessionName,
+            name: agent.windowName || agent.sessionName,
             session: agent.sessionName,
             windowIndex: agent.windowIndex,
             active: false,
@@ -94,14 +94,14 @@ export function AgentStatusGrid({ agents, onSelectAgent, onShowDetails }: AgentS
                   "min-h-[52px] text-left transition-colors hover:bg-white/[0.03]",
                   "focus-visible:outline-none focus-visible:bg-white/[0.04]"
                 )}
-                aria-label={`Open terminal for ${agent.sessionName}`}
+                aria-label={`Open terminal for ${agent.windowName || agent.sessionName}`}
               >
                 <span
                   className="text-[12px] font-mono truncate flex-1"
                   style={{ color: "var(--color-text-primary)" }}
                   title={agent.target}
                 >
-                  {agent.sessionName}
+                  {agent.windowName || agent.sessionName}
                 </span>
                 <StatusBadge status={agent.status} />
               </button>
@@ -123,7 +123,7 @@ export function AgentStatusGrid({ agents, onSelectAgent, onShowDetails }: AgentS
                     style={{ color: "var(--color-text-primary)" }}
                     title={agent.target}
                   >
-                    {agent.sessionName}
+                    {agent.windowName || agent.sessionName}
                   </span>
 
                   {/* Status badge */}
@@ -156,7 +156,7 @@ export function AgentStatusGrid({ agents, onSelectAgent, onShowDetails }: AgentS
                       onShowDetails(agent);
                     }}
                     className="opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 hover:bg-white/[0.08]"
-                    aria-label={`Show details for ${agent.sessionName}`}
+                    aria-label={`Show details for ${agent.windowName || agent.sessionName}`}
                     title="Agent details"
                     style={{ color: "var(--color-accent-primary)" }}
                   >

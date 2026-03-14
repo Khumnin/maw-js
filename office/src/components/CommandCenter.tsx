@@ -279,7 +279,7 @@ function PermissionCard({ agent, send, onAllowAll }: PermissionCardProps) {
       >
         <span style={{ fontSize: 14 }}>🧑‍💻</span>
         <span className="font-mono text-sm font-bold" style={{ color: "#ffa726" }}>
-          {agent.sessionName || agent.windowName}
+          {agent.windowName || agent.sessionName}
         </span>
         <span
           className="ml-1 text-[10px] font-mono px-2 py-0.5 rounded-full"
@@ -2269,7 +2269,7 @@ export const CommandCenter = memo(function CommandCenter({ send, onOpenTerminal 
                                 title={onOpenTerminal ? "Double-click to open terminal" : undefined}
                                 onDoubleClick={() => onOpenTerminal?.(agent.target)}
                               >
-                                {agent.sessionName || agent.windowName}
+                                {agent.windowName || agent.sessionName}
                               </span>
                               {assignedTask && (
                                 <span
@@ -2461,7 +2461,7 @@ export const CommandCenter = memo(function CommandCenter({ send, onOpenTerminal 
                               title={onOpenTerminal ? "Double-click to open terminal" : undefined}
                               onDoubleClick={() => onOpenTerminal?.(agent.target)}
                             >
-                              {agent.sessionName || agent.windowName}
+                              {agent.windowName || agent.sessionName}
                             </span>
                             {(agent.headline || agent.preview) && (
                               <div
