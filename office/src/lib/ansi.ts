@@ -111,7 +111,40 @@ function isBoxHlineOnly(s: string): boolean {
   return stripped.length >= 3 && BOX_HLINE_RE.test(stripped);
 }
 
+/**
+ * Rejoin URLs that were hard-wrapped by the terminal (e.g. by tmux capture-pane).
+ * tmux inserts a hard newline at the terminal width, splitting long URLs mid-path.
+ * This pre-processing step removes those synthetic newlines before any ANSI parsing
+ * or linkification runs.
+ *
+ * Handles two cases:
+ *   1. Clean wrap:   "…auth-se\nrvice/…"
+ *   2. ANSI at wrap: "…auth-se\x1b[0m\n\x1b[32mrvice/…"
+ *
+ * The regex matches a URL fragment ending with a URL-safe character, optional ANSI
+ * reset/set sequences straddling the newline, and a non-whitespace continuation
+ * character on the next line.  The newline (and surrounding ANSI codes) is removed
+ * so the two fragments merge into one URL.
+ */
+function rejoinWrappedUrls(text: string): string {
+  // One or more optional ANSI SGR sequences (e.g. \x1b[0m or \x1b[32m)
+  const ansi = "(?:\\x1b\\[[0-9;]*m)*";
+  const re = new RegExp(
+    // URL fragment ending with a URL-safe character (letter, digit, or /_=-)
+    `(https?://[^\\s]*[a-zA-Z0-9/_=-])` +
+    // Optional ANSI codes before the newline, the newline itself, optional ANSI after
+    `${ansi}\\n${ansi}` +
+    // Non-whitespace/non-newline character that continues the URL
+    `([^\\s\\n])`,
+    "g"
+  );
+  return text.replace(re, "$1$2");
+}
+
 export function ansiToHtml(text: string): string {
+  // Rejoin URLs split across lines by terminal hard-wrap before any other processing.
+  text = rejoinWrappedUrls(text);
+
   let h = "", fg: string | null = null, bg: string | null = null;
   let b = 0, d = 0, i = 0, u = 0, s = 0, open = 0;
 
