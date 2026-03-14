@@ -72,6 +72,14 @@ export function initDb(): void {
       completed_at         INTEGER
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS agent_projects (
+      session_name  TEXT    PRIMARY KEY,
+      project_label TEXT    NOT NULL,
+      updated_at    INTEGER NOT NULL DEFAULT (unixepoch())
+    )
+  `);
 }
 
 // ── Message type ──────────────────────────────────────────────────────────────
@@ -450,4 +458,40 @@ export function kvDelete(key: string): boolean {
   const stmt = db.prepare("DELETE FROM kv_store WHERE key = $key");
   const result = stmt.run({ $key: key });
   return result.changes > 0;
+}
+
+// ── Agent Project Labels ───────────────────────────────────────────────────────
+
+export function setAgentProject(sessionName: string, projectLabel: string): void {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO agent_projects (session_name, project_label, updated_at)
+    VALUES ($session_name, $project_label, unixepoch())
+    ON CONFLICT(session_name) DO UPDATE SET
+      project_label = excluded.project_label,
+      updated_at    = excluded.updated_at
+  `);
+  stmt.run({ $session_name: sessionName, $project_label: projectLabel });
+}
+
+export function getAgentProject(sessionName: string): string | null {
+  const db = getDb();
+  const stmt = db.prepare("SELECT project_label FROM agent_projects WHERE session_name = $session_name");
+  const row = stmt.get({ $session_name: sessionName }) as { project_label: string } | null;
+  return row?.project_label ?? null;
+}
+
+export function getAllAgentProjects(): Map<string, string> {
+  const db = getDb();
+  const stmt = db.prepare("SELECT session_name, project_label FROM agent_projects");
+  const rows = stmt.all({}) as { session_name: string; project_label: string }[];
+  const map = new Map<string, string>();
+  for (const row of rows) map.set(row.session_name, row.project_label);
+  return map;
+}
+
+export function removeAgentProject(sessionName: string): void {
+  const db = getDb();
+  const stmt = db.prepare("DELETE FROM agent_projects WHERE session_name = $session_name");
+  stmt.run({ $session_name: sessionName });
 }

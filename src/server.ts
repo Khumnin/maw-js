@@ -12,7 +12,7 @@ import { readdir, readFile, access } from "fs/promises";
 import { join, dirname, resolve, isAbsolute } from "path";
 import { homedir } from "node:os";
 import { pathValidator } from "./middleware/path-validator";
-import { initDb } from "./db/store";
+import { initDb, setAgentProject, removeAgentProject } from "./db/store";
 import { mailboxRoutes } from "./db/mailbox";
 import { kvRoutes } from "./db/kv";
 import { goalRoutes } from "./db/goals";
@@ -205,6 +205,7 @@ app.post(
     await spawnAgent(name, workDir, initialPrompt, undefined, agentName, skipPermissions);
     if (project) {
       tracker.setSpawnProjectLabel(name, project);
+      setAgentProject(name, project);
     }
     broadcastToAll({ type: "agent-spawned", sessionName: name });
     return c.json({ ok: true, sessionName: name });
@@ -309,6 +310,15 @@ app.patch("/api/agents/:target/project", async (c) => {
     const project = parsed.data.project.trim() || null;
     const found = tracker.setProjectLabel(target, project);
     if (!found) return c.json({ error: "agent not found" }, 404);
+    // Persist the project label so it survives agent restarts
+    const agent = tracker.getAll().find((a) => a.target === target);
+    if (agent) {
+      if (project) {
+        setAgentProject(agent.sessionName, project);
+      } else {
+        removeAgentProject(agent.sessionName);
+      }
+    }
     broadcastToAll({ type: "agents-updated", agents: tracker.getAll() });
     return c.json({ ok: true });
   } catch (e: unknown) {

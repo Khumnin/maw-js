@@ -11,6 +11,7 @@ import * as path from "node:path";
 import { capture } from "./ssh";
 import type { Session } from "./ssh";
 import { MAW_CLAUDE_DIR } from "../paths";
+import { getAllAgentProjects } from "../db/store";
 
 // ── Pricing (per million tokens) ─────────────────────────────────────────────
 
@@ -691,8 +692,14 @@ async function buildTokenUsageByAgent(range: TimeRange, agentLookup?: AgentLooku
   //    (Sprint 1: single project — all files share one directory)
   const fallbackProjectSlug = projectSlugFromDir(JSONL_DIR);
 
-  // Build a sessionName → projectLabel lookup from the tracker
+  // Build a sessionName → projectLabel lookup.
+  // Seed from persisted SQLite records first (covers closed/historical agents),
+  // then overlay live tracker data which takes priority for running agents.
   const agentProjectLabels = new Map<string, string | null>();
+  const persistedLabels = getAllAgentProjects();
+  for (const [name, label] of persistedLabels) {
+    agentProjectLabels.set(name, label);
+  }
   if (agentLookup) {
     for (const a of agentLookup.getAll()) {
       agentProjectLabels.set(a.sessionName, a.projectLabel ?? null);
