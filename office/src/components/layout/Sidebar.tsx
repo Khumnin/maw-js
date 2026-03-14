@@ -17,6 +17,12 @@ interface SidebarProps {
   mobileOpen: boolean;
   /** Called to close the mobile overlay */
   onMobileClose: () => void;
+  /**
+   * When true, SidebarNav renders only the mobile-visible items and omits
+   * the legacy-section separator. Pass `true` from the mobile overlay wrapper
+   * in AppShell, `false` from the desktop wrapper.
+   */
+  mobile?: boolean;
 }
 
 /**
@@ -39,6 +45,7 @@ export const Sidebar = memo(function Sidebar({
   onToggleCollapse,
   mobileOpen,
   onMobileClose,
+  mobile = false,
 }: SidebarProps) {
   const [spawnOpen, setSpawnOpen] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -161,6 +168,7 @@ export const Sidebar = memo(function Sidebar({
             activeRoute={activeRoute}
             collapsed={collapsed}
             onNavClick={onMobileClose}
+            mobile={mobile}
           />
         </div>
 

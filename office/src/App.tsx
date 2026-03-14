@@ -31,9 +31,9 @@ const GoalsPanel = lazy(() =>
 );
 
 function useHashRoute() {
-  const [hash, setHash] = useState(window.location.hash.slice(1) || "office");
+  const [hash, setHash] = useState(window.location.hash.slice(1) || "dashboard");
   useEffect(() => {
-    const onHash = () => setHash(window.location.hash.slice(1) || "office");
+    const onHash = () => setHash(window.location.hash.slice(1) || "dashboard");
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);

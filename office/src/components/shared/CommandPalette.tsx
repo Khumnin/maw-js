@@ -52,13 +52,15 @@ interface CommandPaletteProps {
 // ── Navigation items ──────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { id: "office",    label: "Go to Office",     icon: LayoutGridIcon,    shortcut: "G O" },
+  // New views — primary navigation
   { id: "dashboard", label: "Go to Dashboard",  icon: BarChart3Icon,     shortcut: "G D" },
-  { id: "mission",   label: "Go to Mission",    icon: GlobeIcon,         shortcut: "G M" },
-  { id: "command",   label: "Go to Command",    icon: TerminalIcon,      shortcut: "G C" },
   { id: "tasks",     label: "Go to Tasks",      icon: KanbanSquareIcon,  shortcut: "G T" },
   { id: "goals",     label: "Go to Goals",      icon: TargetIcon,        shortcut: "G G" },
   { id: "tokens",    label: "Go to Costs",      icon: CoinsIcon,         shortcut: "G K" },
+  // Legacy views — power user / desktop
+  { id: "office",    label: "Go to Office",     icon: LayoutGridIcon,    shortcut: "G O" },
+  { id: "mission",   label: "Go to Mission",    icon: GlobeIcon,         shortcut: "G M" },
+  { id: "command",   label: "Go to Command",    icon: TerminalIcon,      shortcut: "G C" },
   { id: "terminal",  label: "Go to Terminal",   icon: MonitorIcon,       shortcut: "G R" },
 ];
 

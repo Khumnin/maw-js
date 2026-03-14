@@ -67,6 +67,7 @@ export function AppShell({ route, agents, connected, children }: AppShellProps) 
           onToggleCollapse={() => setCollapsed((prev) => !prev)}
           mobileOpen={false}
           onMobileClose={closeMobile}
+          mobile={false}
         />
       </div>
 
@@ -80,6 +81,7 @@ export function AppShell({ route, agents, connected, children }: AppShellProps) 
           onToggleCollapse={noop}
           mobileOpen={mobileOpen}
           onMobileClose={closeMobile}
+          mobile={true}
         />
       </div>
 
