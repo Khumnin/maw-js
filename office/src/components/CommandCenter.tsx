@@ -1382,7 +1382,7 @@ interface CommandCenterProps {
 
 export const CommandCenter = memo(function CommandCenter({ send, onOpenTerminal }: CommandCenterProps) {
   const [agents, setAgents] = useState<TrackedAgent[]>([]);
-  const [queue, setQueue] = useState<QueueStatus>({ pending: [], assigned: [], history: [] });
+  const [queue, setQueue] = useState<QueueStatus>({ pending: [], assigned: [], completed: [], failed: [] });
   const [chains, setChains] = useState<TaskChain[]>([]);
   const [command, setCommand] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("normal");
@@ -1512,7 +1512,8 @@ export const CommandCenter = memo(function CommandCenter({ send, onOpenTerminal 
       setQueue((q) => ({
         pending: q.pending.filter((t) => t.id !== task.id),
         assigned: [...q.assigned.filter((t) => t.id !== task.id), task],
-        history: q.history,
+        completed: q.completed,
+        failed: q.failed,
       }));
     } else if (data.type === "task-completed") {
       const task: Task = data.task;
@@ -1523,7 +1524,8 @@ export const CommandCenter = memo(function CommandCenter({ send, onOpenTerminal 
       setQueue((q) => ({
         pending: q.pending.filter((t) => t.id !== task.id),
         assigned: q.assigned.filter((t) => t.id !== task.id),
-        history: [task, ...q.history].slice(0, 50),
+        completed: [task, ...q.completed].slice(0, 50),
+        failed: q.failed,
       }));
     } else if (data.type === "task-failed" || data.type === "task-timeout") {
       const task: Task = data.task;
@@ -1531,10 +1533,11 @@ export const CommandCenter = memo(function CommandCenter({ send, onOpenTerminal 
       setQueue((q) => ({
         pending: q.pending.filter((t) => t.id !== task.id),
         assigned: q.assigned.filter((t) => t.id !== task.id),
-        history: [task, ...q.history].slice(0, 50),
+        completed: q.completed,
+        failed: [task, ...q.failed].slice(0, 50),
       }));
     } else if (data.type === "queue-status") {
-      setQueue({ pending: data.pending ?? [], assigned: data.assigned ?? [], history: data.history ?? [] });
+      setQueue({ pending: data.pending ?? [], assigned: data.assigned ?? [], completed: data.completed ?? [], failed: data.failed ?? [] });
     } else if (data.type === "worker-added") {
       addLog("➕", `Worker added: ${data.sessionName}`, "#64b5f6");
     } else if (data.type === "worker-removed") {
@@ -1743,7 +1746,8 @@ export const CommandCenter = memo(function CommandCenter({ send, onOpenTerminal 
   const allTasks: Task[] = [
     ...queue.assigned,
     ...queue.pending,
-    ...queue.history,
+    ...queue.completed,
+    ...queue.failed,
   ];
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -2039,7 +2043,7 @@ export const CommandCenter = memo(function CommandCenter({ send, onOpenTerminal 
                 Task Queue
               </span>
               <span className="text-[10px] font-mono" style={{ color: "rgba(255,255,255,0.2)" }}>
-                {queue.pending.length} pending · {queue.assigned.length} running · {queue.history.length} history
+                {queue.pending.length} pending · {queue.assigned.length} running · {queue.completed.length + queue.failed.length} history
               </span>
               <button
                 onClick={() => setShowChainBuilder(true)}

@@ -95,7 +95,8 @@ export function createRpcRoutes(
 
           const status = dispatcher.getStatus();
           const found: Task | undefined =
-            status.history.find((t) => t.id === task.id) ??
+            status.completed.find((t) => t.id === task.id) ??
+            status.failed.find((t) => t.id === task.id) ??
             status.assigned.find((t) => t.id === task.id) ??
             status.pending.find((t) => t.id === task.id);
 

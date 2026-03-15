@@ -65,6 +65,9 @@ function startDispatchLoop() {
   }, 2000);
 }
 
+// Start dispatch loop immediately — don't wait for a WebSocket connection
+startDispatchLoop();
+
 // ── Queue API ──────────────────────────────────────────────────────────────────
 
 app.get("/api/queue", (c) => {

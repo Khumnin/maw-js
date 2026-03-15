@@ -104,19 +104,19 @@ export function useTaskQueue(): TaskQueueState {
 
       switch (msg.type) {
         case "queue-status": {
-          // Full replace
+          // Full replace — new format sends completed/failed directly
           const qs = msg as {
             type: string;
             pending?: Task[];
             assigned?: Task[];
-            history?: Task[];
+            completed?: Task[];
+            failed?: Task[];
           };
-          const history: Task[] = qs.history ?? [];
           setState({
             pending: qs.pending ?? [],
             assigned: qs.assigned ?? [],
-            completed: history.filter((t) => t.status === "completed").slice(0, 50),
-            failed: history.filter((t) => t.status === "failed").slice(0, 50),
+            completed: (qs.completed ?? []).slice(0, 50),
+            failed: (qs.failed ?? []).slice(0, 50),
           });
           break;
         }

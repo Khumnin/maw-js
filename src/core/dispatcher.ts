@@ -369,8 +369,14 @@ export class TaskDispatcher {
       .filter((t) => t.status === "pending")
       .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || a.createdAt - b.createdAt);
 
-    // Maintain a mutable pool of still-available idle workers for this tick
-    const availableIdle = this.tracker.getIdleWorkers();
+    // Maintain a mutable pool of still-available idle workers for this tick.
+    // Fallback: if no designated workers are configured, use any idle/waiting agent.
+    let availableIdle = this.tracker.getIdleWorkers();
+    if (availableIdle.length === 0) {
+      availableIdle = this.tracker.getAll().filter(
+        (a) => !a.currentTaskId && (a.status === "waiting" || a.status === "idle")
+      );
+    }
 
     for (const task of pending) {
       if (availableIdle.length === 0) break;
@@ -442,11 +448,12 @@ export class TaskDispatcher {
     }
   }
 
-  getStatus(): { pending: Task[]; assigned: Task[]; history: Task[] } {
+  getStatus(): { pending: Task[]; assigned: Task[]; completed: Task[]; failed: Task[] } {
     return {
-      pending:  this.queue.filter((t) => t.status === "pending").map((t) => this.sanitize(t)),
-      assigned: this.queue.filter((t) => t.status === "assigned").map((t) => this.sanitize(t)),
-      history:  this.history.map((t) => this.sanitize(t)),
+      pending:   this.queue.filter((t) => t.status === "pending").map((t) => this.sanitize(t)),
+      assigned:  this.queue.filter((t) => t.status === "assigned").map((t) => this.sanitize(t)),
+      completed: this.history.filter((t) => t.status === "completed").map((t) => this.sanitize(t)),
+      failed:    this.history.filter((t) => t.status === "failed").map((t) => this.sanitize(t)),
     };
   }
 

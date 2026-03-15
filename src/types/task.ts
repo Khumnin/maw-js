@@ -53,5 +53,6 @@ export interface TaskChain {
 export interface QueueStatus {
   pending: Task[];
   assigned: Task[];
-  history: Task[];
+  completed: Task[];
+  failed: Task[];
 }
