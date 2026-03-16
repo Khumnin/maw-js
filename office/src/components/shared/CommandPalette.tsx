@@ -8,6 +8,7 @@ import {
   CoinsIcon,
   MonitorIcon,
   TargetIcon,
+  GitBranchIcon,
   PlusCircleIcon,
   SendIcon,
   ZapIcon,
@@ -57,6 +58,7 @@ const NAV_ITEMS = [
   { id: "tasks",     label: "Go to Tasks",      icon: KanbanSquareIcon,  shortcut: "G T" },
   { id: "goals",     label: "Go to Goals",      icon: TargetIcon,        shortcut: "G G" },
   { id: "tokens",    label: "Go to Costs",      icon: CoinsIcon,         shortcut: "G K" },
+  { id: "pipelines", label: "Go to Pipelines",  icon: GitBranchIcon,     shortcut: "G P" },
   // Legacy views — power user / desktop
   { id: "office",    label: "Go to Office",     icon: LayoutGridIcon,    shortcut: "G O" },
   { id: "mission",   label: "Go to Mission",    icon: GlobeIcon,         shortcut: "G M" },

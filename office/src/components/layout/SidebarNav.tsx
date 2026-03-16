@@ -8,6 +8,7 @@ import {
   Coins,
   Monitor,
   Target,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -25,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "tasks",     label: "Tasks",     icon: KanbanSquare,  mobileVisible: true },
   { id: "goals",     label: "Goals",     icon: Target,        mobileVisible: true },
   { id: "tokens",    label: "Costs",     icon: Coins,         mobileVisible: true },
+  { id: "pipelines", label: "Pipelines", icon: GitBranch,     mobileVisible: true },
   // Legacy views — desktop only
   { id: "office",    label: "Office",    icon: LayoutGrid,    mobileVisible: false },
   { id: "mission",   label: "Mission",   icon: Globe,         mobileVisible: false },

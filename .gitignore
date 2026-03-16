@@ -8,3 +8,5 @@ dist-office/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+.env
+data/uploads/

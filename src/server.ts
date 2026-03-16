@@ -4,6 +4,7 @@ import { serveStatic } from "hono/bun";
 import { listSessions, capture, sendKeys, selectWindow, spawnAgent, killSession, killEntireSession, renameWindow } from "./services/ssh";
 import { getTokenUsage, getRealtimeSessions, getUsageLimits, getTokenUsageByAgent } from "./services/token-usage";
 import type { TimeRange } from "./services/token-usage";
+import { getDashboardPipelines, getPipelineDetail, getProjects } from "./services/gitlab";
 import { AgentTracker } from "./core/agent-tracker";
 import { TaskDispatcher } from "./core/dispatcher";
 import { loadConfig, addWorker, removeWorker } from "./config";
@@ -547,6 +548,44 @@ app.get("/api/usage-limits", async (c) => {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return c.json({ error: msg }, 500);
+  }
+});
+
+// ── CI/CD Pipeline Dashboard ──────────────────────────────────────────────────
+
+app.get("/api/ci/projects", async (c) => {
+  try {
+    const projects = await getProjects();
+    return c.json({ ok: true, projects });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.get("/api/ci/pipelines", async (c) => {
+  try {
+    const projectIds = c.req.query("projects"); // comma-separated IDs
+    const ids = projectIds
+      ? projectIds.split(",").map(Number).filter(Boolean)
+      : undefined;
+    const pipelines = await getDashboardPipelines(ids);
+    return c.json({ ok: true, pipelines });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.get("/api/ci/pipelines/:projectId/:pipelineId", async (c) => {
+  try {
+    const projectId = Number(c.req.param("projectId"));
+    const pipelineId = Number(c.req.param("pipelineId"));
+    const detail = await getPipelineDetail(projectId, pipelineId);
+    return c.json({ ok: true, pipeline: detail });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
   }
 });
 

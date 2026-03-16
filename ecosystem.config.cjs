@@ -10,6 +10,8 @@ module.exports = {
       env: {
         MAW_HOST: 'local',
         MAW_PORT: '3456',
+        GITLAB_URL: 'https://gitlab.tigersoftcloud.com',
+        GITLAB_TOKEN: process.env.GITLAB_TOKEN || '',
       },
     },
     {

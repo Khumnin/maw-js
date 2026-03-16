@@ -30,6 +30,10 @@ const GoalsPanel = lazy(() =>
   import("./components/goals/GoalsPanel").then((m) => ({ default: m.GoalsPanel }))
 );
 
+const PipelineView = lazy(() =>
+  import("./components/ci/PipelineView").then((m) => ({ default: m.PipelineView }))
+);
+
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash.slice(1) || "dashboard");
   useEffect(() => {
@@ -312,6 +316,31 @@ export function App() {
             }
           >
             <GoalsPanel />
+          </Suspense>
+        </div>
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+      </AppShell>
+    );
+  }
+
+  // ── CI/CD Pipelines ──────────────────────────────────────────────────────────
+  if (route === "pipelines") {
+    return (
+      <AppShell route={route} agents={agents} connected={connected}>
+        {globalNotifications}
+        {globalCommandPalette}
+        <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
+          <Suspense
+            fallback={
+              <div
+                className="flex items-center justify-center h-full"
+                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+              >
+                <p className="text-[12px] font-mono">Loading pipelines…</p>
+              </div>
+            }
+          >
+            <PipelineView />
           </Suspense>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
