@@ -131,19 +131,21 @@ export async function getDashboardPipelines(
   projectIds?: number[]
 ): Promise<PipelineInfo[]> {
   if (dashboardCache && Date.now() - dashboardCache.ts < DASHBOARD_CACHE_TTL) {
+    if (projectIds?.length) {
+      return dashboardCache.data.filter((p) => projectIds.includes(p.projectId));
+    }
     return dashboardCache.data;
   }
 
   const projects = await getProjects();
 
-  // When no explicit list is given, restrict to projects active in the last 7 days
-  // to keep the dashboard focused and reduce API calls.
-  const targetProjects = projectIds
-    ? projects.filter((p) => projectIds.includes(p.id))
-    : projects.filter((p) => {
-        const lastActivity = new Date(p.last_activity_at).getTime();
-        return Date.now() - lastActivity < 7 * 24 * 60 * 60 * 1000;
-      });
+  // Always fetch all projects active in the last 7 days. When projectIds are
+  // provided we filter the cached result in-memory rather than narrowing the
+  // fetch, so the cache stays useful across different filter combinations.
+  const targetProjects = projects.filter((p) => {
+    const lastActivity = new Date(p.last_activity_at).getTime();
+    return Date.now() - lastActivity < 7 * 24 * 60 * 60 * 1000;
+  });
 
   const allPipelines: PipelineInfo[] = [];
 
@@ -184,6 +186,9 @@ export async function getDashboardPipelines(
   );
 
   dashboardCache = { data: allPipelines, ts: Date.now() };
+  if (projectIds?.length) {
+    return allPipelines.filter((p) => projectIds.includes(p.projectId));
+  }
   return allPipelines;
 }
 

@@ -151,7 +151,7 @@ export const PipelineView = memo(function PipelineView() {
       </div>
 
       {/* ── Project filter ───────────────────────────────────────────────── */}
-      {projects.length > 1 && (
+      {projects.length > 0 && (
         <ProjectFilter
           projects={projects}
           selectedIds={selectedProjectIds}

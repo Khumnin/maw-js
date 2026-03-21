@@ -89,6 +89,19 @@ export function initDb(): void {
       updated_at    INTEGER NOT NULL DEFAULT (unixepoch())
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS timesheet_billing_rules (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      rule_type       TEXT    NOT NULL,
+      match_id        TEXT,
+      match_name      TEXT,
+      classification  TEXT    NOT NULL DEFAULT 'non-billable',
+      client_name     TEXT,
+      created_at      TEXT    DEFAULT (datetime('now')),
+      updated_at      TEXT    DEFAULT (datetime('now'))
+    )
+  `);
 }
 
 // ── Message type ──────────────────────────────────────────────────────────────

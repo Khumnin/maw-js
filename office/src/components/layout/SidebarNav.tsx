@@ -9,6 +9,7 @@ import {
   Monitor,
   Target,
   GitBranch,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -27,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "goals",     label: "Goals",     icon: Target,        mobileVisible: true },
   { id: "tokens",    label: "Costs",     icon: Coins,         mobileVisible: true },
   { id: "pipelines", label: "Pipelines", icon: GitBranch,     mobileVisible: true },
+  { id: "timesheet", label: "Timesheet", icon: Clock,         mobileVisible: true },
   // Legacy views — desktop only
   { id: "office",    label: "Office",    icon: LayoutGrid,    mobileVisible: false },
   { id: "mission",   label: "Mission",   icon: Globe,         mobileVisible: false },

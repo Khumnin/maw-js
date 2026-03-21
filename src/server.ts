@@ -5,6 +5,23 @@ import { listSessions, capture, sendKeys, selectWindow, spawnAgent, killSession,
 import { getTokenUsage, getRealtimeSessions, getUsageLimits, getTokenUsageByAgent } from "./services/token-usage";
 import type { TimeRange } from "./services/token-usage";
 import { getDashboardPipelines, getPipelineDetail, getProjects } from "./services/gitlab";
+import {
+  getTeamMembers,
+  getSpaces,
+  getFoldersForSpace,
+  getTimesheetSummary,
+  getTimesheetByProject,
+  getTimesheetCsv,
+  getTimesheetTasks,
+} from "./services/clickup";
+import {
+  listBillingRules,
+  createBillingRule,
+  updateBillingRule,
+  deleteBillingRule,
+  seedBillingRules,
+  getBillingRuleByMatchId,
+} from "./services/billing";
 import { AgentTracker } from "./core/agent-tracker";
 import { TaskDispatcher } from "./core/dispatcher";
 import { loadConfig, addWorker, removeWorker } from "./config";
@@ -52,6 +69,13 @@ const tracker = new AgentTracker();
 const dispatcher = new TaskDispatcher(tracker, broadcastToAll);
 
 initDb();
+
+// Auto-seed default billing rules on first run if table is empty
+try {
+  seedBillingRules();
+} catch (e) {
+  console.warn("Billing rules seed failed:", e instanceof Error ? e.message : String(e));
+}
 
 // Dispatcher loop — poll agents + tick dispatcher every 2s
 let dispatchInterval: ReturnType<typeof setInterval> | null = null;
@@ -583,6 +607,212 @@ app.get("/api/ci/pipelines/:projectId/:pipelineId", async (c) => {
     const pipelineId = Number(c.req.param("pipelineId"));
     const detail = await getPipelineDetail(projectId, pipelineId);
     return c.json({ ok: true, pipeline: detail });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+// ── ClickUp Timesheet Dashboard ───────────────────────────────────────────────
+
+app.get("/api/timesheet/members", async (c) => {
+  try {
+    const members = await getTeamMembers();
+    return c.json({ ok: true, members });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.get("/api/timesheet/spaces", async (c) => {
+  try {
+    const spaces = await getSpaces();
+    return c.json({ ok: true, spaces });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.get("/api/timesheet/spaces/:spaceId/folders", async (c) => {
+  try {
+    const spaceId = c.req.param("spaceId");
+    if (!spaceId) return c.json({ ok: false, error: "spaceId required" }, 400);
+    const rawFolders = await getFoldersForSpace(spaceId);
+    const folders = rawFolders.map((f) => {
+      const rule = getBillingRuleByMatchId(f.id, "folder");
+      return {
+        id: f.id,
+        name: f.name,
+        classification: rule?.classification ?? null,
+        clientName: rule?.clientName ?? null,
+        ruleId: rule?.id ?? null,
+      };
+    });
+    return c.json({ ok: true, folders });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.get("/api/timesheet/summary", async (c) => {
+  try {
+    const start = c.req.query("start");
+    const end = c.req.query("end");
+    if (!start || !end) {
+      return c.json({ ok: false, error: "start and end query params required (YYYY-MM-DD)" }, 400);
+    }
+    const spaceId = c.req.query("space_id") || undefined;
+    const data = await getTimesheetSummary(start, end, spaceId);
+    return c.json({ ok: true, ...data });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.get("/api/timesheet/by-project", async (c) => {
+  try {
+    const start = c.req.query("start");
+    const end = c.req.query("end");
+    if (!start || !end) {
+      return c.json({ ok: false, error: "start and end query params required (YYYY-MM-DD)" }, 400);
+    }
+    const spaceId = c.req.query("space_id") || undefined;
+    const data = await getTimesheetByProject(start, end, spaceId);
+    return c.json({ ok: true, ...data });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.get("/api/timesheet/export", async (c) => {
+  try {
+    const start = c.req.query("start");
+    const end = c.req.query("end");
+    if (!start || !end) {
+      return c.json({ ok: false, error: "start and end query params required (YYYY-MM-DD)" }, 400);
+    }
+    const spaceId = c.req.query("space_id") || undefined;
+    const csv = await getTimesheetCsv(start, end, spaceId);
+    const filename = `timesheet-${start}-to-${end}.csv`;
+    return new Response(csv, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.get("/api/timesheet/tasks", async (c) => {
+  try {
+    const start = c.req.query("start");
+    const end = c.req.query("end");
+    if (!start || !end) {
+      return c.json({ ok: false, error: "start and end query params required (YYYY-MM-DD)" }, 400);
+    }
+    const spaceId = c.req.query("space_id") || undefined;
+    const data = await getTimesheetTasks(start, end, spaceId);
+    return c.json({ ok: true, ...data });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+// ── Billing Rules CRUD ────────────────────────────────────────────────────────
+
+app.get("/api/timesheet/billing-rules", (c) => {
+  try {
+    const rules = listBillingRules();
+    return c.json({ ok: true, rules });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.post("/api/timesheet/billing-rules/seed", (c) => {
+  try {
+    const result = seedBillingRules();
+    return c.json({ ok: true, ...result });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.post("/api/timesheet/billing-rules", async (c) => {
+  try {
+    const body = await c.req.json() as {
+      ruleType?: unknown;
+      matchId?: unknown;
+      matchName?: unknown;
+      classification?: unknown;
+      clientName?: unknown;
+    };
+    if (!body.ruleType || !body.classification) {
+      return c.json({ ok: false, error: "ruleType and classification are required" }, 400);
+    }
+    if (!["space", "folder", "tag"].includes(body.ruleType as string)) {
+      return c.json({ ok: false, error: "ruleType must be space, folder, or tag" }, 400);
+    }
+    if (!["billable", "non-billable"].includes(body.classification as string)) {
+      return c.json({ ok: false, error: "classification must be billable or non-billable" }, 400);
+    }
+    const rule = createBillingRule({
+      ruleType:       body.ruleType as "space" | "folder" | "tag",
+      matchId:        typeof body.matchId === "string" ? body.matchId : undefined,
+      matchName:      typeof body.matchName === "string" ? body.matchName : undefined,
+      classification: body.classification as "billable" | "non-billable",
+      clientName:     typeof body.clientName === "string" ? body.clientName : undefined,
+    });
+    return c.json({ ok: true, rule }, 201);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.put("/api/timesheet/billing-rules/:id", async (c) => {
+  try {
+    const id = Number(c.req.param("id"));
+    if (!id) return c.json({ ok: false, error: "invalid id" }, 400);
+    const body = await c.req.json() as {
+      matchName?: unknown;
+      classification?: unknown;
+      clientName?: unknown;
+    };
+    if (body.classification !== undefined && !["billable", "non-billable"].includes(body.classification as string)) {
+      return c.json({ ok: false, error: "classification must be billable or non-billable" }, 400);
+    }
+    const rule = updateBillingRule(id, {
+      matchName:      typeof body.matchName === "string" ? body.matchName : undefined,
+      classification: body.classification as "billable" | "non-billable" | undefined,
+      clientName:     typeof body.clientName === "string" ? body.clientName : undefined,
+    });
+    if (!rule) return c.json({ ok: false, error: "rule not found" }, 404);
+    return c.json({ ok: true, rule });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+app.delete("/api/timesheet/billing-rules/:id", (c) => {
+  try {
+    const id = Number(c.req.param("id"));
+    if (!id) return c.json({ ok: false, error: "invalid id" }, 400);
+    const ok = deleteBillingRule(id);
+    if (!ok) return c.json({ ok: false, error: "rule not found" }, 404);
+    return c.json({ ok: true });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return c.json({ ok: false, error: msg }, 500);

@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from "react";
+import { useState, useCallback, useMemo, useEffect, lazy, Suspense, Component } from "react";
+import type { ReactNode, ErrorInfo } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useSessions } from "./hooks/useSessions";
 import { AppShell } from "./components/layout/AppShell";
@@ -13,6 +14,64 @@ import { GlobalNotificationProvider } from "./components/GlobalNotificationProvi
 import { CommandPalette } from "./components/shared/CommandPalette";
 import { unlockAudio, isAudioUnlocked } from "./lib/sounds";
 import type { AgentState } from "./lib/types";
+
+// ── ErrorBoundary ────────────────────────────────────────────────────────────
+// Catches lazy-load failures and runtime errors so they don't crash the whole
+// React tree (which would blank-out the page including the sidebar).
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallbackLabel?: string;
+}
+
+interface ErrorBoundaryState {
+  error: Error | null;
+}
+
+class LazyErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error(`[LazyErrorBoundary] ${this.props.fallbackLabel ?? "Component"} failed:`, error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          className="flex flex-col items-center justify-center h-full gap-3"
+          style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+        >
+          <p className="text-[13px] font-mono" style={{ color: "#f87171" }}>
+            Failed to load {this.props.fallbackLabel ?? "component"}
+          </p>
+          <p className="text-[11px] font-mono max-w-md text-center opacity-70">
+            {this.state.error.message}
+          </p>
+          <button
+            className="mt-2 px-3 py-1.5 text-[11px] font-mono rounded border"
+            style={{
+              borderColor: "var(--color-border)",
+              color: "var(--color-text-muted)",
+              background: "var(--color-bg-surface)",
+            }}
+            onClick={() => this.setState({ error: null })}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const DashboardView = lazy(() =>
   import("./components/dashboard/DashboardView").then((m) => ({ default: m.DashboardView }))
@@ -32,6 +91,10 @@ const GoalsPanel = lazy(() =>
 
 const PipelineView = lazy(() =>
   import("./components/ci/PipelineView").then((m) => ({ default: m.PipelineView }))
+);
+
+const TimesheetDashboard = lazy(() =>
+  import("./components/timesheet/TimesheetDashboard").then((m) => ({ default: m.TimesheetDashboard }))
 );
 
 function useHashRoute() {
@@ -215,18 +278,20 @@ export function App() {
         {globalNotifications}
         {globalCommandPalette}
         <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
-          <Suspense
-            fallback={
-              <div
-                className="flex items-center justify-center h-full"
-                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
-              >
-                <p className="text-[12px] font-mono">Loading costs…</p>
-              </div>
-            }
-          >
-            <CostBreakdownView sessions={sessions} />
-          </Suspense>
+          <LazyErrorBoundary fallbackLabel="cost breakdown">
+            <Suspense
+              fallback={
+                <div
+                  className="flex items-center justify-center h-full"
+                  style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+                >
+                  <p className="text-[12px] font-mono">Loading costs…</p>
+                </div>
+              }
+            >
+              <CostBreakdownView sessions={sessions} />
+            </Suspense>
+          </LazyErrorBoundary>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
       </AppShell>
@@ -254,18 +319,20 @@ export function App() {
         {globalNotifications}
         {globalCommandPalette}
         <div className="overflow-y-auto h-full">
-          <Suspense
-            fallback={
-              <div
-                className="flex items-center justify-center h-full"
-                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
-              >
-                <p className="text-[12px] font-mono">Loading dashboard…</p>
-              </div>
-            }
-          >
-            <DashboardView onSelectAgent={onSelectAgent} />
-          </Suspense>
+          <LazyErrorBoundary fallbackLabel="dashboard">
+            <Suspense
+              fallback={
+                <div
+                  className="flex items-center justify-center h-full"
+                  style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+                >
+                  <p className="text-[12px] font-mono">Loading dashboard…</p>
+                </div>
+              }
+            >
+              <DashboardView onSelectAgent={onSelectAgent} />
+            </Suspense>
+          </LazyErrorBoundary>
         </div>
         {terminalModal}
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
@@ -280,18 +347,20 @@ export function App() {
         {globalNotifications}
         {globalCommandPalette}
         <div className="overflow-y-auto h-full">
-          <Suspense
-            fallback={
-              <div
-                className="flex items-center justify-center h-full"
-                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
-              >
-                <p className="text-[12px] font-mono">Loading task board…</p>
-              </div>
-            }
-          >
-            <TaskBoardView />
-          </Suspense>
+          <LazyErrorBoundary fallbackLabel="task board">
+            <Suspense
+              fallback={
+                <div
+                  className="flex items-center justify-center h-full"
+                  style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+                >
+                  <p className="text-[12px] font-mono">Loading task board…</p>
+                </div>
+              }
+            >
+              <TaskBoardView />
+            </Suspense>
+          </LazyErrorBoundary>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
       </AppShell>
@@ -305,18 +374,20 @@ export function App() {
         {globalNotifications}
         {globalCommandPalette}
         <div className="overflow-y-auto h-full">
-          <Suspense
-            fallback={
-              <div
-                className="flex items-center justify-center h-full"
-                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
-              >
-                <p className="text-[12px] font-mono">Loading goals…</p>
-              </div>
-            }
-          >
-            <GoalsPanel />
-          </Suspense>
+          <LazyErrorBoundary fallbackLabel="goals">
+            <Suspense
+              fallback={
+                <div
+                  className="flex items-center justify-center h-full"
+                  style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+                >
+                  <p className="text-[12px] font-mono">Loading goals…</p>
+                </div>
+              }
+            >
+              <GoalsPanel />
+            </Suspense>
+          </LazyErrorBoundary>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
       </AppShell>
@@ -330,18 +401,47 @@ export function App() {
         {globalNotifications}
         {globalCommandPalette}
         <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
-          <Suspense
-            fallback={
-              <div
-                className="flex items-center justify-center h-full"
-                style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
-              >
-                <p className="text-[12px] font-mono">Loading pipelines…</p>
-              </div>
-            }
-          >
-            <PipelineView />
-          </Suspense>
+          <LazyErrorBoundary fallbackLabel="pipelines">
+            <Suspense
+              fallback={
+                <div
+                  className="flex items-center justify-center h-full"
+                  style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+                >
+                  <p className="text-[12px] font-mono">Loading pipelines…</p>
+                </div>
+              }
+            >
+              <PipelineView />
+            </Suspense>
+          </LazyErrorBoundary>
+        </div>
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+      </AppShell>
+    );
+  }
+
+  // ── Timesheet ────────────────────────────────────────────────────────────────
+  if (route === "timesheet") {
+    return (
+      <AppShell route={route} agents={agents} connected={connected}>
+        {globalNotifications}
+        {globalCommandPalette}
+        <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
+          <LazyErrorBoundary fallbackLabel="timesheet">
+            <Suspense
+              fallback={
+                <div
+                  className="flex items-center justify-center h-full"
+                  style={{ background: "var(--color-bg-base)", color: "var(--color-text-muted)" }}
+                >
+                  <p className="text-[12px] font-mono">Loading timesheet…</p>
+                </div>
+              }
+            >
+              <TimesheetDashboard />
+            </Suspense>
+          </LazyErrorBoundary>
         </div>
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
       </AppShell>

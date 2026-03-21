@@ -87,18 +87,21 @@ export function usePipelines(projectIds?: number[]): UsePipelinesReturn {
         const fetched = json.pipelines ?? [];
         setPipelines(fetched);
 
-        // Derive unique projects from the returned pipeline list
-        const projectMap = new Map<number, GitLabProject>();
-        for (const p of fetched) {
-          if (!projectMap.has(p.projectId)) {
-            projectMap.set(p.projectId, {
-              id: p.projectId,
-              name: p.projectName,
-              path: p.projectPath,
-            });
+        // Only update project list from unfiltered results so the full
+        // project list is preserved while a filter is active.
+        if (!filterKey) {
+          const projectMap = new Map<number, GitLabProject>();
+          for (const p of fetched) {
+            if (!projectMap.has(p.projectId)) {
+              projectMap.set(p.projectId, {
+                id: p.projectId,
+                name: p.projectName,
+                path: p.projectPath,
+              });
+            }
           }
+          setProjects(Array.from(projectMap.values()));
         }
-        setProjects(Array.from(projectMap.values()));
         setError(null);
         setLoading(false);
         isInitialRef.current = false;
