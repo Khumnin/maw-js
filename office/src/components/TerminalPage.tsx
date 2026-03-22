@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ansiToHtml } from "../lib/ansi";
 import type { AgentState, Session } from "../lib/types";
 
@@ -204,9 +204,10 @@ function _SessionGroup({
 interface TerminalPanelProps {
   agent: AgentState | null;
   send: (msg: object) => void;
+  selectedHost?: string;
 }
 
-function TerminalPanel({ agent, send }: TerminalPanelProps) {
+function TerminalPanel({ agent, send, selectedHost }: TerminalPanelProps) {
   const [inputBuf, setInputBuf] = useState("");
   const [copiedFeedback, setCopiedFeedback] = useState(false);
   const termRef = useRef<HTMLDivElement>(null);
@@ -280,12 +281,13 @@ function TerminalPanel({ agent, send }: TerminalPanelProps) {
       return;
     }
 
-    send({ type: "subscribe", target: agent.target });
+    send({ type: "subscribe", target: agent.target, host: selectedHost });
     isFirstContent.current = true;
 
     const poll = setInterval(async () => {
       try {
-        const res = await fetch(`/api/capture?target=${encodeURIComponent(agent.target)}&lines=2000`);
+        const hostParam = selectedHost ? `&host=${encodeURIComponent(selectedHost)}` : "";
+        const res = await fetch(`/api/capture?target=${encodeURIComponent(agent.target)}&lines=2000${hostParam}`);
         const data = await res.json();
         const html = ansiToHtml(trimCapture(data.content || ""));
         if (isSelecting.current) {
@@ -299,30 +301,30 @@ function TerminalPanel({ agent, send }: TerminalPanelProps) {
 
     return () => {
       clearInterval(poll);
-      send({ type: "subscribe", target: "" });
+      send({ type: "subscribe", target: "", host: selectedHost });
     };
-  }, [agent?.target, send, updateTerminalDom]);
+  }, [agent?.target, send, updateTerminalDom, selectedHost]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!agent) return;
 
     if (e.key === "Escape") {
       e.preventDefault();
-      send({ type: "send", target: agent.target, text: "\x1b" });
+      send({ type: "send", target: agent.target, text: "\x1b", host: selectedHost });
       return;
     }
-    if (e.key === "ArrowUp")    { e.preventDefault(); send({ type: "send", target: agent.target, text: "\x1b[A" }); return; }
-    if (e.key === "ArrowDown")  { e.preventDefault(); send({ type: "send", target: agent.target, text: "\x1b[B" }); return; }
-    if (e.key === "ArrowLeft")  { e.preventDefault(); send({ type: "send", target: agent.target, text: "\x1b[D" }); return; }
-    if (e.key === "ArrowRight") { e.preventDefault(); send({ type: "send", target: agent.target, text: "\x1b[C" }); return; }
+    if (e.key === "ArrowUp")    { e.preventDefault(); send({ type: "send", target: agent.target, text: "\x1b[A", host: selectedHost }); return; }
+    if (e.key === "ArrowDown")  { e.preventDefault(); send({ type: "send", target: agent.target, text: "\x1b[B", host: selectedHost }); return; }
+    if (e.key === "ArrowLeft")  { e.preventDefault(); send({ type: "send", target: agent.target, text: "\x1b[D", host: selectedHost }); return; }
+    if (e.key === "ArrowRight") { e.preventDefault(); send({ type: "send", target: agent.target, text: "\x1b[C", host: selectedHost }); return; }
 
     if (e.key === "Enter") {
       e.preventDefault();
       if (inputBuf) {
-        send({ type: "send", target: agent.target, text: inputBuf });
+        send({ type: "send", target: agent.target, text: inputBuf, host: selectedHost });
         setInputBuf("");
       } else {
-        send({ type: "send", target: agent.target, text: "\r" });
+        send({ type: "send", target: agent.target, text: "\r", host: selectedHost });
       }
       return;
     }
@@ -332,7 +334,7 @@ function TerminalPanel({ agent, send }: TerminalPanelProps) {
       setInputBuf("");
       return;
     }
-  }, [inputBuf, agent, send]);
+  }, [inputBuf, agent, send, selectedHost]);
 
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
     e.preventDefault();
@@ -377,6 +379,11 @@ function TerminalPanel({ agent, send }: TerminalPanelProps) {
         />
         <span className="font-mono text-[12px] text-white/70 uppercase tracking-wide">{cleanName(agent.name)}</span>
         <span className="ml-2 font-mono text-[10px] text-white/25">{agent.target}</span>
+        {selectedHost && (
+          <span className="ml-2 font-mono text-[10px] px-1.5 py-0.5 rounded bg-cyan-400/10 text-cyan-400/70 border border-cyan-400/20">
+            {selectedHost}
+          </span>
+        )}
         <span
           className="ml-auto font-mono text-[10px] px-1.5 py-0.5 rounded"
           style={{
@@ -448,6 +455,15 @@ function TerminalPanel({ agent, send }: TerminalPanelProps) {
   );
 }
 
+// ── Host type ──────────────────────────────────────────────────────────────────
+
+interface Host {
+  id: string;
+  name: string;
+  address: string;
+  isLocal: boolean;
+}
+
 // ── TerminalPage ───────────────────────────────────────────────────────────────
 
 export interface TerminalPageProps {
@@ -456,9 +472,118 @@ export interface TerminalPageProps {
   send: (msg: object) => void;
 }
 
-export function TerminalPage({ sessions: _sessions, agents, send }: TerminalPageProps) {
+export function TerminalPage({ sessions: _sessions, agents: propAgents, send }: TerminalPageProps) {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // ── Host selection ──────────────────────────────────────────────────────
+  const [hosts, setHosts] = useState<Host[]>([
+    { id: "local", name: "Local", address: "local", isLocal: true },
+  ]);
+  const [selectedHost, setSelectedHost] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    fetch("/api/hosts")
+      .then((r) => r.json())
+      .then((data: { hosts: Host[] }) => {
+        if (data.hosts?.length) setHosts(data.hosts);
+      })
+      .catch(() => {});
+  }, []);
+
+  // ── Remote host sessions ──────────────────────────────────────────────
+  // When a remote host is selected, fetch agent data from the peer's maw-js
+  // instance via federation API (which has proper status tracking), falling back
+  // to raw SSH tmux sessions if federation is unavailable.
+  const [remoteAgents, setRemoteAgents] = useState<AgentState[]>([]);
+
+  useEffect(() => {
+    if (!selectedHost) {
+      setRemoteAgents([]);
+      return;
+    }
+    let cancelled = false;
+
+    async function fetchRemote() {
+      try {
+        // Try federation first — peer's maw-js has proper agent status
+        const fedRes = await fetch("/api/federation/agents");
+        if (fedRes.ok) {
+          const fedData = await fedRes.json() as {
+            agents: Array<{
+              sessionName: string;
+              target: string;
+              status: string;
+              peerId: string;
+              peerName: string;
+            }>;
+          };
+          // Filter to agents from the selected host's peer
+          // selectedHost is the host's `address` (e.g. "asus-rog"), but federation
+          // peers use their own id/name (e.g. "g35dx"/"G35DX"). We need to match
+          // via the hosts list which maps address → name.
+          const selectedHostObj = hosts.find((h) => h.address === selectedHost);
+          const hostName = selectedHostObj?.name?.toLowerCase() ?? "";
+          const hostAddr = (selectedHost ?? "").toLowerCase();
+          const hostId = hostAddr.replace(/\s+/g, "-");
+          const peerAgents = (fedData.agents ?? []).filter(
+            (a) => a.peerName?.toLowerCase() === hostName ||
+                   a.peerName?.toLowerCase() === hostAddr ||
+                   a.peerId === hostId ||
+                   a.peerId === hostName.replace(/\s+/g, "-")
+          );
+          if (!cancelled && peerAgents.length > 0) {
+            setRemoteAgents(
+              peerAgents.map((a) => ({
+                target: a.target,
+                name: a.sessionName,
+                session: a.sessionName,
+                windowIndex: 0,
+                active: true,
+                preview: "",
+                status: (a.status || "idle") as AgentState["status"],
+                isWorker: false,
+                projectLabel: null,
+              }))
+            );
+            return;
+          }
+        }
+
+        // Fallback: raw SSH tmux session listing
+        const res = await fetch(`/api/sessions?host=${encodeURIComponent(selectedHost)}`);
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) {
+          setRemoteAgents(
+            (data as Session[]).flatMap((s) =>
+              s.windows.map((w) => ({
+                target: `${s.name}:${w.index}`,
+                name: w.name,
+                session: s.name,
+                windowIndex: w.index,
+                active: w.active,
+                preview: "",
+                status: "idle" as const,
+                isWorker: false,
+                projectLabel: null,
+              }))
+            )
+          );
+        }
+      } catch {}
+    }
+
+    fetchRemote();
+    const interval = setInterval(fetchRemote, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [selectedHost, hosts]);
+
+  // Use remote agents when a host is selected, otherwise local agents
+  const agents = useMemo(() => {
+    if (!selectedHost) return propAgents;
+    return remoteAgents;
+  }, [selectedHost, propAgents, remoteAgents]);
+
   // Optimistically hidden targets — removed on kill, cleaned up by next poll cycle
   const [killedTargets, setKilledTargets] = useState<Set<string>>(new Set());
   // Inline rename state
@@ -557,6 +682,34 @@ export function TerminalPage({ sessions: _sessions, agents, send }: TerminalPage
           <span className="text-[10px] font-mono text-white/25">{visibleAgents.length}</span>
         </div>
 
+        {/* Host selector — only shown when multiple hosts are available */}
+        {hosts.length > 1 && (
+          <div className="px-3 py-2 border-b border-white/[0.06]">
+            <label className="block text-[9px] font-mono uppercase tracking-wider mb-1 text-white/30">
+              Machine
+            </label>
+            <select
+              value={selectedHost ?? ""}
+              onChange={(e) => {
+                setSelectedHost(e.target.value || undefined);
+                setSelectedTarget(null);
+              }}
+              className="w-full text-[11px] font-mono rounded px-2 py-1 outline-none appearance-none cursor-pointer"
+              style={{
+                background: "#1a1a28",
+                color: "rgba(255,255,255,0.75)",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              {hosts.map((h) => (
+                <option key={h.id} value={h.isLocal ? "" : h.address}>
+                  {h.name}{!h.isLocal ? ` (${h.address})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Session list — flat list like old Terminal */}
         <nav className="py-1">
           {visibleAgents.length === 0 ? (
@@ -601,7 +754,7 @@ export function TerminalPage({ sessions: _sessions, agents, send }: TerminalPage
           </span>
         </div>
 
-        <TerminalPanel agent={selectedAgent} send={send} />
+        <TerminalPanel agent={selectedAgent} send={send} selectedHost={selectedHost} />
       </div>
     </div>
   );

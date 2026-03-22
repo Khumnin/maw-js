@@ -2,7 +2,7 @@ const DEFAULT_HOST = process.env.MAW_HOST || "white.local";
 const IS_LOCAL = DEFAULT_HOST === "local" || DEFAULT_HOST === "localhost";
 
 export async function ssh(cmd: string, host = DEFAULT_HOST): Promise<string> {
-  const local = host === "local" || host === "localhost" || IS_LOCAL;
+  const local = host === "local" || host === "localhost" || (host === DEFAULT_HOST && IS_LOCAL);
   const args = local ? ["bash", "-c", cmd] : ["ssh", host, cmd];
   const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
   const text = await new Response(proc.stdout).text();
