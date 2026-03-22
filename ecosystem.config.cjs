@@ -10,6 +10,9 @@ module.exports = {
       env: {
         MAW_HOST: 'local',
         MAW_PORT: '3456',
+        MAW_REMOTE_HOSTS: 'G35DX:asus-rog',
+        MAW_INSTANCE_NAME: 'Mac',
+        MAW_PEERS: 'G35DX:http://192.168.1.38:3456',
         GITLAB_URL: 'https://gitlab.tigersoftcloud.com',
         GITLAB_TOKEN: process.env.GITLAB_TOKEN || '',
       },

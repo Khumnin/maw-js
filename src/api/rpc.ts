@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { capture } from "../services/ssh.js";
 import type { AgentTracker, TrackedAgent } from "../core/agent-tracker.js";
 import type { TaskDispatcher, Task } from "../core/dispatcher.js";
-import type { RpcCall } from "../types/api.js";
+import type { RpcCall, RpcStatus } from "../types/api.js";
 import { RpcCallSchema } from "../types/api.js";
 
 // Re-export RpcCall so existing importers of rpc.ts continue to work.
@@ -36,14 +36,26 @@ export function createRpcRoutes(
       return c.json({ error: issue?.message ?? "invalid request" }, 400);
     }
 
-    const { from, to, prompt, timeout: timeoutRaw } = parsed.data;
+    const { from, to, prompt, timeout: timeoutRaw, async: isAsync } = parsed.data;
     const timeoutMs = timeoutRaw ?? DEFAULT_TIMEOUT_MS;
 
     // Resolve target agent by session name
     const agents: TrackedAgent[] = tracker.getAll();
     const targetAgent = agents.find((a) => a.sessionName === to);
     if (!targetAgent) {
-      return c.json({ error: `agent with session name '${to}' not found` }, 404);
+      // Try to find the agent on a peer instance before giving up
+      const { findAgentPeer, forwardRpcToPeer } = await import("../services/federation.js");
+      const peerId = await findAgentPeer(to);
+
+      if (peerId) {
+        const result = await forwardRpcToPeer(peerId, from, to, prompt, isAsync ?? false, timeoutMs);
+        if (result.ok) {
+          return c.json(result.data);
+        }
+        return c.json({ error: result.error, forwarded: true, peerId }, 502);
+      }
+
+      return c.json({ error: `agent '${to}' not found locally or on any peer` }, 404);
     }
 
     // Submit high-priority task with affinity for the target agent
@@ -68,6 +80,20 @@ export function createRpcRoutes(
 
     rpcCalls.set(call.id, call);
     broadcast({ type: "rpc-initiated", call: { ...call } });
+
+    // Fire-and-forget mode — return immediately, caller polls status later
+    if (isAsync) {
+      call.status = "running";
+      rpcCalls.set(call.id, call);
+      return c.json({
+        id: call.id,
+        from: call.from,
+        to: call.to,
+        taskId: task.id,
+        status: "dispatched",
+        message: `Task dispatched to ${to}. Poll GET /api/rpc/${call.id}/status for updates.`,
+      });
+    }
 
     // Poll for completion — honour client disconnect via AbortController
     const ac = new AbortController();
@@ -102,6 +128,18 @@ export function createRpcRoutes(
 
           if (!found) return; // not yet visible — keep polling
 
+          // Broadcast when task is picked up by an agent
+          if (found.status === "assigned" && call.status !== "assigned") {
+            call.status = "assigned" as RpcStatus;
+            rpcCalls.set(call.id, call);
+            broadcast({
+              type: "rpc-assigned",
+              call: { ...call },
+              assignedTo: found.assignedTo,
+              assignedToName: found.assignedToName,
+            });
+          }
+
           if (found.status === "completed") {
             clearInterval(interval);
             resolve();
@@ -133,12 +171,35 @@ export function createRpcRoutes(
 
       if (msg === "timeout") {
         call.status = "timeout";
-      } else if (msg === "client disconnected") {
-        call.status = "failed";
-      } else {
-        call.status = "failed";
+        // Capture current task state for debugging
+        const taskStatus = dispatcher.getStatus();
+        const currentTask =
+          taskStatus.assigned.find((t) => t.id === task.id) ??
+          taskStatus.pending.find((t) => t.id === task.id);
+        const wasPickedUp = !!currentTask && currentTask.status === "assigned";
+
+        call.completedAt = Date.now();
+        rpcCalls.set(call.id, call);
+        broadcast({ type: "rpc-failed", call: { ...call }, reason: msg });
+
+        return c.json(
+          {
+            error: "timeout",
+            id: call.id,
+            from: call.from,
+            to: call.to,
+            status: call.status,
+            taskPickedUp: wasPickedUp,
+            assignedTo: currentTask?.assignedToName ?? null,
+            message: wasPickedUp
+              ? `Task was picked up by ${currentTask?.assignedToName} but did not complete within ${timeoutMs}ms. The agent is still working — poll GET /api/rpc/${call.id}/status for updates.`
+              : `Task was not picked up by any agent within ${timeoutMs}ms.`,
+          },
+          504 as 504,
+        );
       }
 
+      call.status = "failed";
       call.completedAt = Date.now();
       rpcCalls.set(call.id, call);
       broadcast({ type: "rpc-failed", call: { ...call }, reason: msg });

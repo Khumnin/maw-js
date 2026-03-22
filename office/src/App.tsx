@@ -12,6 +12,7 @@ import { CommandCenter } from "./components/CommandCenter";
 import { TerminalPage } from "./components/TerminalPage";
 import { GlobalNotificationProvider } from "./components/GlobalNotificationProvider";
 import { CommandPalette } from "./components/shared/CommandPalette";
+import { ImageUploadButton } from "./components/ImageUploadButton";
 import { unlockAudio, isAudioUnlocked } from "./lib/sounds";
 import type { AgentState } from "./lib/types";
 
@@ -98,9 +99,9 @@ const TimesheetDashboard = lazy(() =>
 );
 
 function useHashRoute() {
-  const [hash, setHash] = useState(window.location.hash.slice(1) || "dashboard");
+  const [hash, setHash] = useState(window.location.hash.slice(1) || "command");
   useEffect(() => {
-    const onHash = () => setHash(window.location.hash.slice(1) || "dashboard");
+    const onHash = () => setHash(window.location.hash.slice(1) || "command");
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -199,6 +200,9 @@ export function App() {
   // Global notification overlay — mounted on every route, always active.
   const globalNotifications = <GlobalNotificationProvider agents={agents} />;
 
+  // Global image upload button — floating camera FAB, visible on every route.
+  const imageUploadButton = <ImageUploadButton />;
+
   // Global command palette — mounted on every route, Cmd+K to open.
   const handleKillAgent = useCallback((target: string) => {
     send({ type: "kill-agent", target });
@@ -239,6 +243,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <div className="h-full flex flex-col" style={{ background: "var(--color-bg-base)" }}>
           <CommandCenter send={send} onOpenTerminal={handleOpenTerminal} />
         </div>
@@ -254,6 +259,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <MissionControl
           sessions={sessions}
           agents={agents}
@@ -277,6 +283,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
           <LazyErrorBoundary fallbackLabel="cost breakdown">
             <Suspense
@@ -304,6 +311,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <div className="flex flex-col h-full" style={{ background: "var(--color-bg-base)" }}>
           <TerminalPage sessions={sessions} agents={agents} send={send} />
         </div>
@@ -318,6 +326,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <div className="overflow-y-auto h-full">
           <LazyErrorBoundary fallbackLabel="dashboard">
             <Suspense
@@ -346,6 +355,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <div className="overflow-y-auto h-full">
           <LazyErrorBoundary fallbackLabel="task board">
             <Suspense
@@ -373,6 +383,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <div className="overflow-y-auto h-full">
           <LazyErrorBoundary fallbackLabel="goals">
             <Suspense
@@ -400,6 +411,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
           <LazyErrorBoundary fallbackLabel="pipelines">
             <Suspense
@@ -427,6 +439,7 @@ export function App() {
       <AppShell route={route} agents={agents} connected={connected}>
         {globalNotifications}
         {globalCommandPalette}
+        {imageUploadButton}
         <div className="overflow-y-auto h-full" style={{ background: "var(--color-bg-base)" }}>
           <LazyErrorBoundary fallbackLabel="timesheet">
             <Suspense

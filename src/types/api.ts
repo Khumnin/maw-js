@@ -7,7 +7,7 @@ import { z } from "zod";
 
 // ── RPC ───────────────────────────────────────────────────────────────────────
 
-export type RpcStatus = "pending" | "running" | "completed" | "failed" | "timeout";
+export type RpcStatus = "pending" | "running" | "assigned" | "completed" | "failed" | "timeout";
 
 export interface RpcCall {
   id: string;
@@ -97,6 +97,7 @@ export const RpcCallSchema = z.object({
   to:      z.string().min(1, "to (target session name) required"),
   prompt:  z.string().min(1, "prompt required"),
   timeout: z.number().int().min(1_000).max(300_000).optional(),
+  async:   z.boolean().optional(),
 });
 
 export type RpcCallInput = z.infer<typeof RpcCallSchema>;

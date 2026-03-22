@@ -105,6 +105,7 @@ export class TaskDispatcher {
   private queue: Task[] = [];
   private history: Task[] = [];
   private chains: Map<string, TaskChain> = new Map();
+  private _ticking = false;
 
   constructor(
     private tracker: AgentTracker,
@@ -262,6 +263,9 @@ export class TaskDispatcher {
   // ── Main tick ───────────────────────────────────────────────────────────────
 
   async tick(): Promise<void> {
+    if (this._ticking) return;
+    this._ticking = true;
+    try {
     const now = Date.now();
 
     // 1. Check assigned tasks for completion or timeout
@@ -404,6 +408,11 @@ export class TaskDispatcher {
         ? `score ${bestScore} — ${bestReasons.join(" + ")}`
         : "first available worker";
 
+      // Guard: a previous tick cycle may have already assigned this task
+      // (e.g. if sendKeys() in a prior overlapping tick completed after we
+      // built the pending list but before we reached this point).
+      if (task.status !== "pending") continue;
+
       task.status = "assigned";
       task.assignedTo = worker.target;
       task.assignedToName = worker.sessionName;
@@ -445,6 +454,9 @@ export class TaskDispatcher {
         assignedAt: task.assignedAt,
         completedAt: task.completedAt,
       });
+    }
+    } finally {
+      this._ticking = false;
     }
   }
 

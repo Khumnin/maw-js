@@ -36,6 +36,7 @@ import { kvRoutes } from "./db/kv";
 import { goalRoutes } from "./db/goals";
 import { createRpcRoutes } from "./api/rpc";
 import { createDiscoveryRoutes } from "./api/discovery";
+import { initPeers, getPeers, checkAllPeers, discoverAllPeerAgents } from "./services/federation";
 import type { AgentDefinition } from "./types/api.js";
 import { SubmitTaskSchema, CancelTaskSchema, SubmitChainSchema, WorkerActionSchema, SpawnAgentSchema, SetProjectSchema } from "./types/api.js";
 import { MAW_AGENTS_DIR, MAW_UPLOAD_DIR } from "./paths";
@@ -53,7 +54,7 @@ const app = new Hono();
 app.use("/api/*", cors());
 
 // --- WebSocket client set (must be declared before tracker/dispatcher) ---
-type WSData = { target: string | null; lines: number };
+type WSData = { target: string | null; lines: number; host: string | undefined };
 const clients = new Set<ServerWebSocket<WSData>>();
 
 // ── Command Center — Agent Tracker + Task Dispatcher ──────────────────────────
@@ -69,6 +70,7 @@ const tracker = new AgentTracker();
 const dispatcher = new TaskDispatcher(tracker, broadcastToAll);
 
 initDb();
+initPeers();
 
 // Auto-seed default billing rules on first run if table is empty
 try {
@@ -273,27 +275,49 @@ app.delete("/api/chain/:id", (c) => {
 });
 
 // API routes (keep for CLI compatibility)
-app.get("/api/sessions", async (c) => c.json(await listSessions()));
+app.get("/api/sessions", async (c) => {
+  const host = c.req.query("host") || undefined;
+  return c.json(await listSessions(host));
+});
 
 app.get("/api/capture", async (c) => {
   const target = c.req.query("target");
   if (!target) return c.json({ error: "target required" }, 400);
   const lines = Math.min(Math.max(+(c.req.query("lines") || 80), 1), 10000);
-  return c.json({ content: await capture(target, lines) });
+  const host = c.req.query("host") || undefined;
+  return c.json({ content: await capture(target, lines, host) });
 });
 
 app.post("/api/send", async (c) => {
-  const { target, text } = await c.req.json();
+  const { target, text, host } = await c.req.json();
   if (!target || !text) return c.json({ error: "target and text required" }, 400);
-  await sendKeys(target, text);
+  await sendKeys(target, text, host || undefined);
   return c.json({ ok: true, target, text });
 });
 
 app.post("/api/select", async (c) => {
-  const { target } = await c.req.json();
+  const { target, host } = await c.req.json();
   if (!target) return c.json({ error: "target required" }, 400);
-  await selectWindow(target);
+  await selectWindow(target, host || undefined);
   return c.json({ ok: true, target });
+});
+
+// GET /api/hosts — list configured remote hosts
+app.get("/api/hosts", (c) => {
+  const hosts: { id: string; name: string; address: string; isLocal: boolean }[] = [
+    { id: "local", name: "Local (Mac)", address: "local", isLocal: true },
+  ];
+  // Check for configured remote hosts from env
+  const remoteHosts = process.env.MAW_REMOTE_HOSTS; // comma-separated: "name:address,name:address"
+  if (remoteHosts) {
+    for (const entry of remoteHosts.split(",")) {
+      const [name, address] = entry.split(":");
+      if (name && address) {
+        hosts.push({ id: address, name: name.trim(), address: address.trim(), isLocal: false });
+      }
+    }
+  }
+  return c.json({ hosts });
 });
 
 app.delete("/api/agents/:target", async (c) => {
@@ -819,6 +843,18 @@ app.delete("/api/timesheet/billing-rules/:id", (c) => {
   }
 });
 
+// ── Federation ───────────────────────────────────────────────────────────────
+
+app.get("/api/federation/peers", async (c) => {
+  await checkAllPeers();
+  return c.json({ peers: getPeers() });
+});
+
+app.get("/api/federation/agents", async (c) => {
+  const agents = await discoverAllPeerAgents();
+  return c.json({ agents });
+});
+
 // Agent-to-Agent communication
 app.route("/api/mailbox", mailboxRoutes);
 app.route("/api/kv", kvRoutes);
@@ -838,7 +874,7 @@ const lastContent = new Map<ServerWebSocket<WSData>, string>();
 async function pushCapture(ws: ServerWebSocket<WSData>) {
   if (!ws.data.target) return;
   try {
-    const content = await capture(ws.data.target, ws.data.lines || 80);
+    const content = await capture(ws.data.target, ws.data.lines || 80, ws.data.host);
     const prev = lastContent.get(ws);
     if (content !== prev) {
       lastContent.set(ws, content);
@@ -888,7 +924,7 @@ export function startServer(port = +(process.env.MAW_PORT || 3456)) {
       const url = new URL(req.url);
       // Upgrade WebSocket
       if (url.pathname === "/ws") {
-        if (server.upgrade(req, { data: { target: null, lines: 2000 } })) return;
+        if (server.upgrade(req, { data: { target: null, lines: 2000, host: undefined } })) return;
         return new Response("WebSocket upgrade failed", { status: 400 });
       }
       return app.fetch(req);
@@ -908,13 +944,14 @@ export function startServer(port = +(process.env.MAW_PORT || 3456)) {
         try {
           const data = JSON.parse(msg as string);
           if (data.type === "subscribe") {
+            ws.data.host = data.host;
             ws.data.target = data.target;
             ws.data.lines = data.lines || 80;
             pushCapture(ws); // immediate first push
           } else if (data.type === "select") {
-            selectWindow(data.target).catch(() => {});
+            selectWindow(data.target, data.host).catch(() => {});
           } else if (data.type === "send") {
-            sendKeys(data.target, data.text)
+            sendKeys(data.target, data.text, data.host)
               .then(() => {
                 ws.send(JSON.stringify({ type: "sent", ok: true, target: data.target, text: data.text }));
                 // Push capture after short delay to show result
